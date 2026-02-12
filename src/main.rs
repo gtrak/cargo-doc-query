@@ -1,3 +1,4 @@
+mod cache;
 mod cargo;
 mod cli;
 mod index;
