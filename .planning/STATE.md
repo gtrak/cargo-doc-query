@@ -8,9 +8,9 @@
 
 ## Current Position
 
-**Completed:** Phase 2 — Core Querying ✅
+**Completed:** Phase 2 — Core Querying ✅, Phase 3 Plan 1 — Performance (Caching & Incremental Rebuilds) ✅
 **Working on:** Phase 3 — Performance optimization
-**Phase 3 Status:** Planned, ready for execution
+**Phase 3 Status:** Plan 1 complete (2/2 plans remaining)
 **Next milestone:** Sub-100ms query performance through intelligent caching
 
 ### Phase 1 Progress
@@ -55,25 +55,25 @@
 **Goal:** Query responses complete in under 100ms through intelligent caching and automatic incremental rebuilds.
 
 **Requirements:**
-- BUILD-03: Index is cached to disk for sub-100ms query performance
-- BUILD-04: Index automatically rebuilds when Cargo.lock changes
+- BUILD-03: Index is cached to disk for sub-100ms query performance ✅
+- BUILD-04: Index automatically rebuilds when Cargo.lock changes ✅
 
 **Plans:**
-- **03-01:** Automatic cache invalidation — extends cache key to include Cargo.toml, adds manifest change detection to query command, triggers transparent rebuilds
+- **03-01:** ✅ Automatic cache invalidation — extends cache key to include Cargo.toml, adds manifest change detection to query command, triggers transparent rebuilds
+- **03-02:** [TODO] Parallel query execution
 
 **Current Status:**
-- ✅ Planned — 1 plan ready for execution
-- Cache already implemented (from Phase 1)
-- Cache invalidation via Cargo.lock hash
-- Next: Extend to Cargo.toml, add automatic rebuild trigger, performance benchmarking
+- ✅ Plan 01 complete — cache key includes Cargo.toml, automatic rebuild on manifest changes, sub-100ms query verified (7ms)
+- ✅ Cache invalidation via Cargo.lock hash extended to include Cargo.toml
+- ✅ Dependency filtering excludes transitive dependencies (7 direct deps indexed)
 
 ---
 
 ## Active Plan
 
-**Plan:** 02-05 - End-to-end verification (checkpoint)
-**Status:** Ready for human verification
-**Last activity:** 2026-02-12 - Completed 02-04-SUMMARY.md
+**Plan:** 03-02 - [TODO] Parallel query execution
+**Status:** Planned, ready for execution
+**Last activity:** 2026-02-12 - Completed 03-01-SUMMARY.md
 
 ### Completed Plans
 
@@ -83,6 +83,7 @@
 | 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
 | 01-03 | Cache persistence | cd35fbe | BLAKE3 key generation, postcard serialization, cache store integration |
 | 01-04 | Gap closure - manifest resolution | e13ab03 | Fixed rustdoc-json manifest resolution, filtered external dependencies, graceful error handling |
+| 03-01 | Automatic cache invalidation | 5a94b94 | Cache key includes Cargo.toml, automatic rebuild on manifest changes, sub-100ms query verified (7ms) |
 
 ### Completed Tasks (All Plans)
 
@@ -102,6 +103,10 @@
 | 01-04 | 1 | Filter external dependencies only | 0583c81 |
 | 01-04 | 2 | Fix rustdoc-json manifest path handling | e13ab03 |
 | 01-04 | 3 | Verify cache contains actual data | (skipped - gitignored) |
+| 03-01 | 1 | Extend CacheKeyInputs to include Cargo.toml | 5a94b94 |
+| 03-01 | 2 | Add manifest change detection to query command | 4d2f372 |
+| 03-01 | 3 | Fix dependency discovery to exclude transitive deps | 6d79aed |
+| 03-01 | 4 | Add benchmark timing to verify performance | 4d2f372 |
 
 ---
 
@@ -149,6 +154,10 @@ Parser & Cache Layer (serde_json, postcard)
 | 2026-02-12 | Graceful error handling on individual crates | Continues build even if one dependency fails |
 | 2026-02-12 | BLAKE3 cache key from Cargo.lock + rustc version + target | Ensures cache invalidation on dependency changes |
 | 2026-02-12 | Postcard binary serialization for cache storage | Smaller files, faster I/O, sub-100ms reads |
+| 2026-02-12 | Include Cargo.toml in cache key | Ensures cache invalidates on dependency/features changes; complements Cargo.lock version pinning |
+| 2026-02-12 | Query auto-rebuild on manifest change | Transparent user experience; eliminates manual rebuild after `cargo update` |
+| 2026-02-12 | Use metadata.resolve for direct deps only | Reduces index size; prevents duplicate indexing; excludes implementation details |
+| 2026-02-12 | Print timing to stderr | Separates metadata from JSON output; clean stdout for scripts |
 
 ### Open Questions
 
@@ -173,19 +182,18 @@ None
 
 - Project initialized with requirements and research complete
 - Phase 1 roadmap created with 5 phases covering 18 v1 requirements
-- 01-01: CLI foundation with clap and Command trait (complete)
-- 01-02: Build workflow with dependency discovery, rustdoc JSON generation, format validation, and graph index (complete)
-- 01-03: Cache persistence with BLAKE3 keys and postcard serialization (complete)
-- 01-04: Gap closure - fixed rustdoc-json manifest resolution and verified cache (complete)
+- Phase 1 complete: CLI foundation, build workflow, cache persistence, manifest resolution (80+ external deps indexed)
+- Phase 2 complete: Core querying with methods, traits, JSON output (verified with 80+ external crate queries)
+- 03-01: Automatic cache invalidation with Cargo.toml+Cargo.lock support, sub-100ms query performance (7ms), transparent rebuilds (complete)
 
 ### Session Handoff Notes
 
 If resuming work:
-1. Current phase: Phase 2 (Core Querying)
-2. Active plan: Starting Phase 2 execution with 5 plans
-3. Foundation is complete: users can run `cargo doc-query build` with caching for 80+ external dependencies
-4. Graph relationships not yet populated (Phase 02 work will populate them)
-5. BUILD-01, BUILD-02, and BUILD-05 requirements verified (cargo doc-query build succeeds, format validation works)
+1. Current phase: Phase 3 (Performance optimization)
+2. Active plan: 03-02 - Parallel query execution (not yet started)
+3. Caching layer is complete: automatic invalidation on manifest changes, sub-100ms queries, transitive deps filtered
+4. BUILD-03 and BUILD-04 requirements satisfied
+5. Query engine ready for parallelization (considered for 03-02)
 
 ---
 
@@ -193,10 +201,10 @@ If resuming work:
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Query latency (cached) | — | <100ms |
+| Query latency (cached) | 7ms (verified) | <100ms |
 | Build time (small project) | <5s | <5s |
-| Requirements implemented | 5/18 | 18/18 |
-| Phases complete | 1/5 (Phase 1) | 5/5 |
+| Requirements implemented | 7/18 | 18/18 |
+| Phases complete | 1.5/5 (Phase 1 + Phase 3 Plan 1) | 5/5 |
 
 ---
 
