@@ -1,37 +1,43 @@
 # Project State: cargo-doc-query
 
-**Current Phase:** 1 — Foundation (JSON Ingestion & Index)  
-**Phase Status:** ⏳ Pending  
+**Current Phase:** 1 — Foundation (JSON Ingestion & Index)
+**Phase Status:** 🔄 In progress
 **Last Updated:** 2026-02-12
 
 ---
 
 ## Current Position
 
-**Working on:** Phase 1 — Foundation  
-**Next milestone:** Phase 1 success criteria completion  
+**Working on:** Phase 1 — Foundation
+**Next milestone:** Phase 1 success criteria completion
 
 ### Phase 1 Progress
 
 | Success Criterion | Status |
 |-------------------|--------|
-| User can run `cargo doc-query build` | ⏳ Pending |
+| User can run `cargo doc-query build` | ✅ Pending implementation |
 | Build generates rustdoc JSON for all dependencies | ⏳ Pending |
 | Format version validated (fail fast on incompatible) | ⏳ Pending |
 | Graph-based index created and persisted | ⏳ Pending |
 
-**Progress:** ░░░░░░░░░░ 0%
+**Progress:** ░░░░░░░░░░ 10% (Plan 01-01 complete)
 
 ---
 
 ## Active Plan
 
-**Plan:** Phase 1 Implementation  
-**Status:** ⏳ Not Started  
+**Plan:** 01-01
+**Status:** ✅ Complete
 
-### Current Tasks
+### Completed Tasks
 
-*No active tasks. Run `/gsd-plan-phase 1` to generate Phase 1 plan.*
+| Task | Name | Commit |
+| ---- | ---- | ------ |
+| 1 | Declare dependencies in Cargo.toml | 45b77d0 |
+| 2 | Create CLI entry point with clap | 36b7bfb |
+| 3 | Create Command trait architecture | 33e3410 |
+
+**Next Plan:** 01-02
 
 ---
 
@@ -71,6 +77,8 @@ Parser & Cache Layer (serde_json, postcard)
 | 2026-02-12 | Use rustdoc JSON instead of LSP | Deterministic, no daemon, machine-readable |
 | 2026-02-12 | 5-phase roadmap | Balances depth vs. delivery; follows architectural dependencies |
 | 2026-02-12 | Content-hash cache invalidation | Automatic rebuild on dependency changes |
+| 2026-02-12 | Use clap derive macros for CLI | Type-safe argument parsing, easier maintenance |
+| 2026-02-12 | Establish Command trait pattern | Enables extensible command architecture for future phases |
 
 ### Open Questions
 
