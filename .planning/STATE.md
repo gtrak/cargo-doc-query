@@ -1,17 +1,16 @@
 # Project State: cargo-doc-query
 
-**Current Phase:** 3 — Performance (Caching & Incremental Rebuilds)
-**Phase Status:** ⏳ Ready to plan
+**Current Phase:** 4 — Advanced Features (Recursive Expansion & Token Budgets)
+**Phase Status:** ✅ Complete
 **Last Updated:** 2026-02-12
 
 ---
 
 ## Current Position
 
-**Completed:** Phase 2 — Core Querying ✅, Phase 3 Plan 1 — Performance (Caching & Incremental Rebuilds) ✅
-**Working on:** Phase 3 — Performance optimization
-**Phase 3 Status:** Plan 1 complete (2/2 plans remaining)
-**Next milestone:** Sub-100ms query performance through intelligent caching
+**Completed:** Phase 4 — Advanced Features ✅
+**Working on:** Phase 5 — Integration & Polish (ready to start)
+**Next milestone:** Production-ready CLI with comprehensive error handling and shell integration
 
 ### Phase 1 Progress
 
@@ -69,6 +68,31 @@
 
 ---
 
+## Phase 4 Progress
+
+**Goal:** Users can explore type hierarchies recursively with depth limits and constrain output by token budgets for LLM efficiency.
+
+| Success Criterion | Status |
+|-------------------|--------|
+| User can expand a type recursively | ✅ Implemented (04-01) |
+| Expansion respects depth limits | ✅ Implemented (04-01) |
+| User can set token budget constraints | ✅ Implemented (04-02) |
+| Minimal mode outputs signature-only | ✅ Implemented (04-02) |
+| Query command supports --minimal and --tokens | ✅ Implemented (04-03) |
+
+**Progress:** ████████████ 100% (All plans complete)
+
+**Delivered:**
+- `cargo doc-query expand <path> --depth N` command
+- Type hierarchy exploration with cycle detection
+- `--tokens N` flag for token budget control
+- `--minimal` flag for signature-only output
+- Consistent flags across query and expand commands
+- Token estimation: JSON length / 4
+- Budget exceeded warnings with truncated paths
+
+---
+
 ## Active Plan
 
 **Plan:** 03-02 - [TODO] Parallel query execution
@@ -84,6 +108,9 @@
 | 01-03 | Cache persistence | cd35fbe | BLAKE3 key generation, postcard serialization, cache store integration |
 | 01-04 | Gap closure - manifest resolution | e13ab03 | Fixed rustdoc-json manifest resolution, filtered external dependencies, graceful error handling |
 | 03-01 | Automatic cache invalidation | 5a94b94 | Cache key includes Cargo.toml, automatic rebuild on manifest changes, sub-100ms query verified (7ms) |
+| 04-01 | Recursive type expansion | 7f2c3c8 | Expand command with --depth, cycle detection, field extraction |
+| 04-02 | Token budgets & minimal mode | 0884afb | --tokens and --minimal flags for expand command |
+| 04-03 | Query integration | a816fcd | --tokens and --minimal flags for query command |
 
 ### Completed Tasks (All Plans)
 
@@ -181,19 +208,18 @@ None
 ### Recent Context
 
 - Project initialized with requirements and research complete
-- Phase 1 roadmap created with 5 phases covering 18 v1 requirements
 - Phase 1 complete: CLI foundation, build workflow, cache persistence, manifest resolution (80+ external deps indexed)
 - Phase 2 complete: Core querying with methods, traits, JSON output (verified with 80+ external crate queries)
-- 03-01: Automatic cache invalidation with Cargo.toml+Cargo.lock support, sub-100ms query performance (7ms), transparent rebuilds (complete)
+- Phase 3: Automatic cache invalidation with sub-100ms queries (deferred parallel execution to v1.1)
+- Phase 4 complete: Recursive type expansion, token budgets, minimal mode for both query and expand commands
 
 ### Session Handoff Notes
 
 If resuming work:
-1. Current phase: Phase 3 (Performance optimization)
-2. Active plan: 03-02 - Parallel query execution (not yet started)
-3. Caching layer is complete: automatic invalidation on manifest changes, sub-100ms queries, transitive deps filtered
-4. BUILD-03 and BUILD-04 requirements satisfied
-5. Query engine ready for parallelization (considered for 03-02)
+1. Current phase: Phase 5 (Integration & Polish)
+2. Phase 4 is complete: Recursive expansion, token budgets, minimal mode all implemented
+3. Both query and expand commands support --minimal and --tokens flags
+4. Ready to start Phase 5: Error handling, progress indicators, documentation polish
 
 ---
 
@@ -203,8 +229,8 @@ If resuming work:
 |--------|---------|--------|
 | Query latency (cached) | 7ms (verified) | <100ms |
 | Build time (small project) | <5s | <5s |
-| Requirements implemented | 7/18 | 18/18 |
-| Phases complete | 1.5/5 (Phase 1 + Phase 3 Plan 1) | 5/5 |
+| Requirements implemented | 13/18 | 18/18 |
+| Phases complete | 4/5 | 5/5 |
 
 ---
 

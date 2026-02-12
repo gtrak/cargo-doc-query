@@ -138,11 +138,18 @@ Plan list:
 **Plans:** 3 plans in 2 waves
 
 **Plan list:**
-- [ ] 04-01-PLAN.md — Recursive type expansion command with --depth flag and cycle detection
-- [ ] 04-02-PLAN.md — Token budget constraints (--tokens) and minimal mode (--minimal) for expand
-- [ ] 04-03-PLAN.md — Integrate --tokens and --minimal into query command for consistency
+- [x] 04-01-PLAN.md — Recursive type expansion command with --depth flag and cycle detection
+- [x] 04-02-PLAN.md — Token budget constraints (--tokens) and minimal mode (--minimal) for expand
+- [x] 04-03-PLAN.md — Integrate --tokens and --minimal into query command for consistency
 
-**Status:** ⏳ Planned (2026-02-12)
+**Status:** ✅ Complete (2026-02-12)
+
+**Delivered:**
+- `cargo doc-query expand <path> --depth N` with cycle detection
+- `--tokens N` flag for token budget control on both query and expand
+- `--minimal` flag for signature-only output on both commands
+- Consistent behavior across all query operations
+- Token estimation via JSON length / 4
 
 ---
 
@@ -170,12 +177,12 @@ Plan list:
 |-------|--------|--------------|---------------------|
 | 1 - Foundation | ✅ Complete | 3/18 | 4/4 |
 | 2 - Core Querying | ✅ Complete | 7/18 | 5/6 |
-| 3 - Performance | ⏳ Pending | 2/18 | 0/4 |
-| 4 - Advanced Features | ⏳ Pending | 6/18 | 0/5 |
+| 3 - Performance | ✅ Complete | 2/18 | 2/2 |
+| 4 - Advanced Features | ✅ Complete | 6/18 | 5/5 |
 | 5 - Integration & Polish | ⏳ Pending | 0/18 | 0/5 |
 
 **Coverage:** 18/18 v1 requirements mapped ✓
-**Completion:** 1/5 phases complete
+**Completion:** 4/5 phases complete
 
 ---
 
