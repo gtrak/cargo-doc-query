@@ -217,11 +217,11 @@ impl QueryEngine {
 
     /// Get fully qualified path for an item
     fn get_qualified_path(&self, krate: &Crate, id: Id) -> Result<String> {
-        krate
+        Ok(krate
             .paths
             .get(&id)
             .map(|summary| summary.path.join("::"))
-            .ok_or_else(|| anyhow::anyhow!("No path found for item"))
+            .unwrap_or_else(|| format!("{:?}", id)))
     }
 
     /// Extract content based on item kind and query options

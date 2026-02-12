@@ -14,10 +14,17 @@ pub fn get_workspace_dependencies(
         .context("Failed to load cargo metadata")?;
 
     // Find the root package (the one at manifest_path)
+    // Normalize paths for comparison (handle relative vs absolute)
+    let manifest_path =
+        std::fs::canonicalize(manifest_path).unwrap_or_else(|_| manifest_path.to_path_buf());
     let root_package = metadata
         .packages
         .iter()
-        .find(|p| p.manifest_path.as_std_path() == manifest_path)
+        .find(|p| {
+            let package_path = std::fs::canonicalize(p.manifest_path.as_std_path())
+                .unwrap_or_else(|_| p.manifest_path.as_std_path().to_path_buf());
+            package_path == manifest_path
+        })
         .or_else(|| metadata.packages.first())
         .ok_or_else(|| anyhow::anyhow!("No root package found"))?;
 
