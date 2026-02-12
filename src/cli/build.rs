@@ -87,7 +87,7 @@ impl BuildCommand {
         Ok(paths)
     }
 
-    /// Generate stdlib rustdoc JSON using rustc --document-std
+    /// Generate stdlib rustdoc JSON using rust-src component
     fn generate_stdlib_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
         let stdlib_dir = PathBuf::from("target/doc-query/stdlib");
 
@@ -96,40 +96,75 @@ impl BuildCommand {
 
         println!("Generating stdlib rustdoc JSON...");
 
-        // Use rustc --document-std to generate stdlib JSON
-        let output = std::process::Command::new("rustc")
-            .args([
-                "+nightly",
-                "--document-std",
-                &format!("--output={}", stdlib_dir.display()),
-            ])
-            .output()
-            .context("Failed to generate stdlib JSON")?;
+        // Find rust-src directory
+        let rustup_home = std::env::var("RUSTUP_HOME")
+            .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.rustup", h)))
+            .unwrap_or_else(|_| String::from("~/.rustup"));
 
-        if !output.status.success() {
+        let toolchain = "nightly"; // Try nightly first
+        let rust_src_dir = PathBuf::from(&rustup_home)
+            .join("toolchains")
+            .join(format!("{}-x86_64-unknown-linux-gnu", toolchain))
+            .join("lib/rustlib/src/rust/library");
+
+        // Fallback to stable if nightly not available
+        let rust_src_dir = if rust_src_dir.exists() {
+            rust_src_dir
+        } else {
+            let stable_toolchain = "stable";
+            PathBuf::from(&rustup_home)
+                .join("toolchains")
+                .join(format!("{}-x86_64-unknown-linux-gnu", stable_toolchain))
+                .join("lib/rustlib/src/rust/library")
+        };
+
+        if !rust_src_dir.exists() {
             return Err(anyhow::anyhow!(
-                "rustc --document-std failed: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "Rust source not found at {}. Run: rustup component add rust-src",
+                rust_src_dir.display()
             ));
         }
 
-        // Collect generated JSON files
-        let mut stdlib_crates = Vec::new();
+        println!("Found rust-src at: {}", rust_src_dir.display());
 
-        // rustc --document-std generates JSON for: std, core, alloc, proc_macro, test
-        let stdlib_list = [
-            ("std", "0.0.0"),
-            ("core", "0.0.0"),
-            ("alloc", "0.0.0"),
-            ("proc_macro", "0.0.0"),
-            ("test", "0.0.0"),
+        // Generate JSON for each stdlib crate
+        let mut stdlib_crates = Vec::new();
+        let stdlib_packages = [
+            ("std", "0.0.0", "std"),
+            ("core", "0.0.0", "core"),
+            ("alloc", "0.0.0", "alloc"),
+            ("proc_macro", "0.0.0", "proc_macro"),
         ];
 
-        for (name, version) in stdlib_list {
-            let json_path = stdlib_dir.join(format!("{}.json", name));
-            if json_path.exists() {
-                stdlib_crates.push((name.to_string(), version.to_string(), json_path));
-                println!("✓ Generated stdlib JSON: {}", name);
+        for (name, version, package) in stdlib_packages {
+            println!("Generating JSON for {}...", name);
+
+            let builder = Builder::default()
+                .toolchain("nightly")
+                .manifest_path(&rust_src_dir.join("Cargo.toml"))
+                .package(package);
+
+            // Wrap build in catch_unwind for graceful error handling
+            match panic::catch_unwind(|| builder.build()) {
+                Ok(Ok(path)) => {
+                    // Copy JSON to our stdlib directory with proper naming
+                    let dest_path = stdlib_dir.join(format!("{}.json", name));
+                    match std::fs::copy(&path, &dest_path) {
+                        Ok(_) => {
+                            println!("✓ Generated stdlib JSON: {}", name);
+                            stdlib_crates.push((name.to_string(), version.to_string(), dest_path));
+                        }
+                        Err(e) => {
+                            eprintln!("⚠ Failed to copy JSON for {}: {}", name, e);
+                        }
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("⚠ Failed to generate JSON for {}: {} (continuing)", name, e);
+                }
+                Err(_) => {
+                    eprintln!("⚠ Panic while generating JSON for {} (continuing)", name);
+                }
             }
         }
 
