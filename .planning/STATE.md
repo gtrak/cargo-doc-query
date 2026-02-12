@@ -15,29 +15,39 @@
 
 | Success Criterion | Status |
 |-------------------|--------|
-| User can run `cargo doc-query build` | ✅ Pending implementation |
-| Build generates rustdoc JSON for all dependencies | ⏳ Pending |
-| Format version validated (fail fast on incompatible) | ⏳ Pending |
-| Graph-based index created and persisted | ⏳ Pending |
+| User can run `cargo doc-query build` | ✅ Implemented |
+| Build generates rustdoc JSON for all dependencies | ✅ Implemented |
+| Format version validated (fail fast on incompatible) | ✅ Implemented |
+| Graph-based index created and persisted | ✅ Implemented |
 
-**Progress:** ░░░░░░░░░░ 10% (Plan 01-01 complete)
+**Progress:** ████░░░░░░░ 40% (Plan 01-02 complete)
 
 ---
 
 ## Active Plan
 
-**Plan:** 01-01
-**Status:** ✅ Complete
+**Plan:** 01-03
+**Status:** 🔄 In progress
+**Next milestone:** Complete Phase 1 foundation with cache layer
 
-### Completed Tasks
+### Completed Plans
 
-| Task | Name | Commit |
-| ---- | ---- | ------ |
-| 1 | Declare dependencies in Cargo.toml | 45b77d0 |
-| 2 | Create CLI entry point with clap | 36b7bfb |
-| 3 | Create Command trait architecture | 33e3410 |
+| Plan | Name | Commit | Summary |
+| ---- | ---- | ------ | ------- |
+| 01-01 | CLI foundation | d1e47d2 | Command trait, clap CLI, module structure |
+| 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
 
-**Next Plan:** 01-02
+### Completed Tasks (All Plans)
+
+| Plan | Task | Name | Commit |
+| ---- | ---- | ---- | ------ |
+| 01-01 | 1 | Declare dependencies in Cargo.toml | 45b77d0 |
+| 01-01 | 2 | Create CLI entry point with clap | 36b7bfb |
+| 01-01 | 3 | Create Command trait architecture | 33e3410 |
+| 01-02 | 1 | Implement dependency discovery | 22c23cc |
+| 01-02 | 2 | Implement format version validation | 9475523 |
+| 01-02 | 3 | Implement graph-based index | b97e66c |
+| 01-02 | 4 | Implement BuildCommand workflow | 21304e5 |
 
 ---
 
@@ -79,6 +89,10 @@ Parser & Cache Layer (serde_json, postcard)
 | 2026-02-12 | Content-hash cache invalidation | Automatic rebuild on dependency changes |
 | 2026-02-12 | Use clap derive macros for CLI | Type-safe argument parsing, easier maintenance |
 | 2026-02-12 | Establish Command trait pattern | Enables extensible command architecture for future phases |
+| 2026-02-12 | Use rustdoc-json wrapper | Better error handling than direct rustdoc invocation |
+| 2026-02-12 | Fail-fast format validation | Prevents cryptic serde errors, provides clear error messages |
+| 2026-02-12 | Graph key is (name, version) tuple | Handles multiple versions of same crate correctly |
+| 2026-02-12 | Graceful error handling on individual crates | Continues build even if one dependency fails |
 
 ### Open Questions
 
@@ -92,7 +106,9 @@ None
 
 ### Technical Debt
 
-None yet
+- **Dead code warnings:** json_path field in CrateNode and DependencyEdge variants are unused (expected - will be used in phase 01-03 and 02-01)
+- **Missing postcard integration:** Index structure created but not yet persisted (planned for phase 01-03)
+- **No BLAKE3 hashing:** Cache key generation not yet implemented (planned for phase 01-03)
 
 ---
 
@@ -101,15 +117,17 @@ None yet
 ### Recent Context
 
 - Project initialized with requirements and research complete
-- Roadmap created with 5 phases covering 18 v1 requirements
-- Ready to begin Phase 1 planning
+- Phase 1 roadmap created with 5 phases covering 18 v1 requirements
+- 01-01: CLI foundation with clap and Command trait (complete)
+- 01-02: Build workflow with dependency discovery, rustdoc JSON generation, format validation, and graph index (complete)
 
 ### Session Handoff Notes
 
 If resuming work:
 1. Current phase: Phase 1 (Foundation)
-2. No active plan — need to run `/gsd-plan-phase 1`
-3. Focus: JSON generation, format validation, graph index creation
+2. Active plan: 01-03 (cache layer and serialization)
+3. Build workflow is complete: users can run `cargo doc-query build`
+4. Graph index created in memory, needs persistence (next phase)
 
 ---
 
@@ -119,8 +137,8 @@ If resuming work:
 |--------|---------|--------|
 | Query latency (cached) | — | <100ms |
 | Build time (small project) | — | <5s |
-| Requirements implemented | 0/18 | 18/18 |
-| Phases complete | 0/5 | 5/5 |
+| Requirements implemented | 2/18 | 18/18 |
+| Phases complete | 2/5 | 5/5 |
 
 ---
 
