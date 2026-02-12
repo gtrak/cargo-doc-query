@@ -23,52 +23,157 @@ impl BuildCommand {
         }
     }
 
+    fn find_cached_json(&self, package_name: &str, package_version: &str) -> Option<PathBuf> {
+        // Convert package name to file name format (e.g., "serde_json" -> "serde_json")
+        let json_name = package_name.replace("-", "_");
+
+        // Search in ~/.cargo/registry/src for pre-generated JSON
+        let cargo_home = std::env::var("CARGO_HOME")
+            .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.cargo", h)))
+            .unwrap_or_else(|_| String::from("~/.cargo"));
+
+        let registry_src = PathBuf::from(cargo_home).join("registry/src");
+
+        if !registry_src.exists() {
+            return None;
+        }
+
+        // Look for the crate directory matching the name and version
+        // Pattern: registry/src/*/package-name-version/target/doc/package_name.json
+        if let Ok(entries) = std::fs::read_dir(&registry_src) {
+            for entry in entries.flatten() {
+                if let Ok(crates) = std::fs::read_dir(entry.path()) {
+                    for crate_entry in crates.flatten() {
+                        let crate_path = crate_entry.path();
+                        let crate_name = crate_path.file_name()?.to_str()?;
+
+                        // Check if this directory matches our package
+                        if crate_name.starts_with(&format!("{}-{}", package_name, package_version))
+                            || crate_name.starts_with(&format!(
+                                "{}-{}",
+                                package_name.replace("-", "_"),
+                                package_version
+                            ))
+                        {
+                            let json_path = crate_path
+                                .join("target/doc")
+                                .join(format!("{}.json", json_name));
+                            if json_path.exists() {
+                                // Verify format version is compatible
+                                if let Ok(content) = std::fs::read_to_string(&json_path) {
+                                    if let Ok(format_version) =
+                                        Self::extract_format_version(&content)
+                                    {
+                                        if format_version == 57 {
+                                            // Current supported version
+                                            return Some(json_path);
+                                        } else {
+                                            eprintln!("⚠ Cached JSON for {} has format version {}, expected 57 (will regenerate)",
+                                                package_name, format_version);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Extract format version from JSON content without full parsing
+    fn extract_format_version(json_content: &str) -> Result<u32> {
+        // Quick extraction: find "format_version":N pattern
+        if let Some(pos) = json_content.find("\"format_version\"") {
+            let after_key = &json_content[pos + 16..]; // Skip "format_version"
+            if let Some(colon_pos) = after_key.find(':') {
+                let after_colon = &after_key[colon_pos + 1..];
+                // Extract number (handle whitespace)
+                let number_str: String = after_colon
+                    .chars()
+                    .skip_while(|c| c.is_whitespace())
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                if let Ok(version) = number_str.parse::<u32>() {
+                    return Ok(version);
+                }
+            }
+        }
+        Err(anyhow::anyhow!("format_version not found in JSON"))
+    }
+
     fn generate_rustdoc_json(
         &self,
         deps: &[(String, String, Utf8PathBuf)], // External dependencies with manifest paths
     ) -> Result<Vec<(String, String, PathBuf)>> {
         let mut paths = Vec::new();
+        let mut need_generation = Vec::new();
 
         println!(
-            "Generating rustdoc JSON for {} external dependency(s)...",
+            "Checking for cached rustdoc JSON for {} external dependency(s)...",
             deps.len()
         );
 
+        // First, try to find cached JSON files
         for (package_name, package_version, manifest_path) in deps {
+            if let Some(cached_path) = self.find_cached_json(package_name, package_version) {
+                println!(
+                    "✓ Found cached rustdoc JSON for {} v{}: {}",
+                    package_name,
+                    package_version,
+                    cached_path.display()
+                );
+                paths.push((package_name.clone(), package_version.clone(), cached_path));
+            } else {
+                need_generation.push((
+                    package_name.clone(),
+                    package_version.clone(),
+                    manifest_path.clone(),
+                ));
+            }
+        }
+
+        // Generate JSON for crates that don't have cached versions
+        if !need_generation.is_empty() {
             println!(
-                "Processing {} v{} at {}...",
-                package_name, package_version, manifest_path
+                "\nGenerating rustdoc JSON for {} crate(s) without cache...",
+                need_generation.len()
             );
 
-            // Use rustdoc-json with package-local manifest to document external dependencies
-            let builder = Builder::default()
-                .toolchain("nightly")
-                .manifest_path(manifest_path);
+            for (package_name, package_version, manifest_path) in need_generation {
+                println!("Processing {} v{}...", package_name, package_version);
 
-            let builder = if self.all_features {
-                builder.all_features(true)
-            } else {
-                builder
-            };
+                // Use rustdoc-json with package-local manifest to document external dependencies
+                let builder = Builder::default()
+                    .toolchain("nightly")
+                    .manifest_path(&manifest_path);
 
-            // Wrap build in catch_unwind for graceful error handling
-            // If a single crate fails, continue with others (graceful degradation)
-            match panic::catch_unwind(|| builder.build()) {
-                Ok(Ok(path)) => {
-                    println!("✓ Successfully generated rustdoc JSON: {}", path.display());
-                    paths.push((package_name.clone(), package_version.clone(), path));
-                }
-                Ok(Err(e)) => {
-                    eprintln!(
-                        "⚠ Failed to generate rustdoc JSON for {} v{}: {} (continuing with other crates)",
-                        package_name, package_version, e
-                    );
-                }
-                Err(_) => {
-                    eprintln!(
-                        "⚠ Rust panic while generating rustdoc JSON for {} v{} (continuing with other crates)",
-                        package_name, package_version
-                    );
+                let builder = if self.all_features {
+                    builder.all_features(true)
+                } else {
+                    builder
+                };
+
+                // Wrap build in catch_unwind for graceful error handling
+                match panic::catch_unwind(|| builder.build()) {
+                    Ok(Ok(path)) => {
+                        println!("✓ Successfully generated: {}", path.display());
+                        paths.push((package_name, package_version, path));
+                    }
+                    Ok(Err(e)) => {
+                        eprintln!(
+                            "⚠ Failed for {} v{}: {} (continuing)",
+                            package_name, package_version, e
+                        );
+                    }
+                    Err(_) => {
+                        eprintln!(
+                            "⚠ Panic for {} v{} (continuing)",
+                            package_name, package_version
+                        );
+                    }
                 }
             }
         }
