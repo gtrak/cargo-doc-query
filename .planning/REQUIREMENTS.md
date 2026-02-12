@@ -73,29 +73,39 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| QUERY-01 | Phase 3 | Pending |
-| QUERY-02 | Phase 3 | Pending |
-| QUERY-03 | Phase 3 | Pending |
-| QUERY-04 | Phase 5 | Pending |
-| QUERY-05 | Phase 5 | Pending |
-| QUERY-06 | Phase 5 | Pending |
-| BUILD-01 | Phase 3 | Pending |
+| QUERY-01 | Phase 2 | Pending |
+| QUERY-02 | Phase 2 | Pending |
+| QUERY-03 | Phase 2 | Pending |
+| QUERY-04 | Phase 4 | Pending |
+| QUERY-05 | Phase 4 | Pending |
+| QUERY-06 | Phase 4 | Pending |
+| BUILD-01 | Phase 1 | Pending |
 | BUILD-02 | Phase 1 | Pending |
-| BUILD-03 | Phase 4 | Pending |
-| BUILD-04 | Phase 4 | Pending |
+| BUILD-03 | Phase 3 | Pending |
+| BUILD-04 | Phase 3 | Pending |
 | BUILD-05 | Phase 1 | Pending |
-| TRAIT-01 | Phase 3 | Pending |
-| TRAIT-02 | Phase 3 | Pending |
-| TYPE-01 | Phase 5 | Pending |
-| TYPE-02 | Phase 5 | Pending |
-| FMT-01 | Phase 3 | Pending |
-| FMT-02 | Phase 5 | Pending |
-| FMT-03 | Phase 3 | Pending |
+| TRAIT-01 | Phase 2 | Pending |
+| TRAIT-02 | Phase 2 | Pending |
+| TYPE-01 | Phase 4 | Pending |
+| TYPE-02 | Phase 4 | Pending |
+| FMT-01 | Phase 2 | Pending |
+| FMT-02 | Phase 4 | Pending |
+| FMT-03 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
 - Mapped to phases: 18
 - Unmapped: 0 ✓
+
+### Phase Summary
+
+| Phase | Requirement Count | Requirements |
+|-------|-------------------|--------------|
+| Phase 1 - Foundation | 3 | BUILD-01, BUILD-02, BUILD-05 |
+| Phase 2 - Core Querying | 7 | QUERY-01, QUERY-02, QUERY-03, TRAIT-01, TRAIT-02, FMT-01, FMT-03 |
+| Phase 3 - Performance | 2 | BUILD-03, BUILD-04 |
+| Phase 4 - Advanced Features | 6 | QUERY-04, QUERY-05, QUERY-06, TYPE-01, TYPE-02, FMT-02 |
+| Phase 5 - Integration & Polish | 0 | (polish requirements) |
 
 ---
 *Requirements defined: 2026-02-12*
