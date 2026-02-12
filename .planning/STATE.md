@@ -10,6 +10,7 @@
 
 **Completed:** Phase 2 — Core Querying ✅
 **Working on:** Phase 3 — Performance optimization
+**Phase 3 Status:** Planned, ready for execution
 **Next milestone:** Sub-100ms query performance through intelligent caching
 
 ### Phase 1 Progress
@@ -57,10 +58,14 @@
 - BUILD-03: Index is cached to disk for sub-100ms query performance
 - BUILD-04: Index automatically rebuilds when Cargo.lock changes
 
+**Plans:**
+- **03-01:** Automatic cache invalidation — extends cache key to include Cargo.toml, adds manifest change detection to query command, triggers transparent rebuilds
+
 **Current Status:**
+- ✅ Planned — 1 plan ready for execution
 - Cache already implemented (from Phase 1)
 - Cache invalidation via Cargo.lock hash
-- Next: Query result caching, performance benchmarking
+- Next: Extend to Cargo.toml, add automatic rebuild trigger, performance benchmarking
 
 ---
 

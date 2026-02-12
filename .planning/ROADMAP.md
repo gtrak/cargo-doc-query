@@ -104,6 +104,11 @@ Plan list:
 **Key Risks Addressed:**
 - Cache Invalidation Complexity (content-addressable storage)
 
+**Plans:** 1 plan
+
+**Plan list:**
+- [ ] 03-01-PLAN.md — Automatic cache invalidation with manifest change detection
+
 ---
 
 ## Phase 4: Advanced Features — Recursive Expansion & Token Budgets
