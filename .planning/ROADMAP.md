@@ -32,6 +32,13 @@ A 5-phase roadmap delivering a Cargo subcommand for fast, structured API queries
 - Multiple Package Version Output Collision
 - Rustdoc failures handled gracefully
 
+**Plans:** 3 plans
+
+**Plan list:**
+- [x] 01-01-PLAN.md — CLI foundation, dependencies, Command trait
+- [x] 01-02-PLAN.md — Dependency discovery, rustdoc JSON generation, format validation, graph index
+- [x] 01-03-PLAN.md — Cache persistence with postcard/BLAKE3
+
 ---
 
 ## Phase 2: Core Querying — Methods & Traits
@@ -131,7 +138,7 @@ A 5-phase roadmap delivering a Cargo subcommand for fast, structured API queries
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|--------------|---------------------|
-| 1 - Foundation | ⏳ Pending | 3/18 | 0/4 |
+| 1 - Foundation | 📋 Planned | 3/18 | 0/4 |
 | 2 - Core Querying | ⏳ Pending | 7/18 | 0/6 |
 | 3 - Performance | ⏳ Pending | 2/18 | 0/4 |
 | 4 - Advanced Features | ⏳ Pending | 6/18 | 0/5 |
