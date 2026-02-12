@@ -19,7 +19,7 @@ pub fn get_workspace_dependencies(
         .iter()
         .find(|p| p.manifest_path.as_std_path() == manifest_path)
         .or_else(|| metadata.packages.first())
-        .ok_else(|| anyhow::anyhow!("No root package found"))?;
+        .ok_or_else(|| anyhow::anyhow!("No root package found"))?;
 
     // Get direct dependencies only (from the root package's resolve node)
     let direct_dep_ids: HashSet<_> = metadata
