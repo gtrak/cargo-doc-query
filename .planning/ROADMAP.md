@@ -70,6 +70,15 @@ A 5-phase roadmap delivering a Cargo subcommand for fast, structured API queries
 **Key Risks Addressed:**
 - Cross-Crate ID Resolution Failures (handled via two-tier lookup)
 
+**Plans:** 5 plans
+
+Plan list:
+- [ ] 02-01-PLAN.md — JSON output schema types (QueryResponse, MethodOutput, TraitOutput)
+- [ ] 02-02-PLAN.md — Query engine module (path resolution, ID lookup, type formatting)
+- [ ] 02-03-PLAN.md — Core QueryEngine (load cache, execute queries, extract methods/traits)
+- [ ] 02-04-PLAN.md — CLI query command (clap integration, JSON output)
+- [ ] 02-05-PLAN.md — End-to-end verification (human checkpoint)
+
 ---
 
 ## Phase 3: Performance — Caching & Incremental Rebuilds
