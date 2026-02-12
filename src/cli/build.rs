@@ -130,19 +130,28 @@ impl BuildCommand {
         // Generate JSON for each stdlib crate
         let mut stdlib_crates = Vec::new();
         let stdlib_packages = [
-            ("std", "0.0.0", "std"),
-            ("core", "0.0.0", "core"),
-            ("alloc", "0.0.0", "alloc"),
-            ("proc_macro", "0.0.0", "proc_macro"),
+            ("std", "0.0.0", "std/Cargo.toml"),
+            ("core", "0.0.0", "core/Cargo.toml"),
+            ("alloc", "0.0.0", "alloc/Cargo.toml"),
+            ("proc_macro", "0.0.0", "proc_macro/Cargo.toml"),
         ];
 
-        for (name, version, package) in stdlib_packages {
+        for (name, version, manifest_rel_path) in stdlib_packages {
             println!("Generating JSON for {}...", name);
+
+            let manifest_path = rust_src_dir.join(manifest_rel_path);
+            if !manifest_path.exists() {
+                eprintln!(
+                    "⚠ Manifest not found for {}: {} (skipping)",
+                    name,
+                    manifest_path.display()
+                );
+                continue;
+            }
 
             let builder = Builder::default()
                 .toolchain("nightly")
-                .manifest_path(&rust_src_dir.join("Cargo.toml"))
-                .package(package);
+                .manifest_path(&manifest_path);
 
             // Wrap build in catch_unwind for graceful error handling
             match panic::catch_unwind(|| builder.build()) {
