@@ -59,6 +59,14 @@ enum Commands {
         /// Which kind of query (methods, traits, types, all)
         #[arg(long, default_value = "all")]
         kind: String,
+
+        /// Output minimal representation (signatures only, no docs)
+        #[arg(long)]
+        minimal: bool,
+
+        /// Maximum tokens in output (approximate)
+        #[arg(long)]
+        tokens: Option<usize>,
     },
 
     /// Expand a type to show its full type hierarchy
@@ -109,6 +117,8 @@ fn main() {
             crate_name,
             include,
             kind,
+            minimal,
+            tokens,
         } => {
             let kind = match kind.to_lowercase().as_str() {
                 "methods" => cli::query::QueryKindArg::Methods,
@@ -117,9 +127,16 @@ fn main() {
                 _ => cli::query::QueryKindArg::All,
             };
 
-            QueryCommand::new(path.clone(), crate_name.clone(), include.clone(), kind)
-                .execute()
-                .expect("Query failed");
+            QueryCommand::new(
+                path.clone(),
+                crate_name.clone(),
+                include.clone(),
+                kind,
+                *minimal,
+                *tokens,
+            )
+            .execute()
+            .expect("Query failed");
         }
         Commands::Expand {
             path,

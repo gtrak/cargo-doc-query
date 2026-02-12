@@ -69,7 +69,7 @@ pub(crate) fn is_false(b: &bool) -> bool {
 }
 
 /// Associated type output for trait queries
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct AssociatedTypeOutput {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -109,6 +109,23 @@ impl QueryResponse {
     pub fn add_error(&mut self, error: String) {
         self.errors.push(error);
     }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            query: self.query.clone(),
+            matches: self.matches.iter().map(|m| m.to_minimal()).collect(),
+            errors: self.errors.clone(),
+        }
+    }
+
+    /// Estimate token count (JSON length / 4)
+    pub fn estimate_tokens(&self) -> usize {
+        match serde_json::to_string(self) {
+            Ok(json) => json.len() / 4,
+            Err(_) => 0,
+        }
+    }
 }
 
 impl QueryMatch {
@@ -126,6 +143,20 @@ impl QueryMatch {
             fully_qualified_path,
             kind,
             content,
+        }
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            crate_name: self.crate_name.clone(),
+            version: self.version.clone(),
+            fully_qualified_path: self.fully_qualified_path.clone(),
+            kind: self.kind.clone(),
+            content: match &self.content {
+                QueryContent::Type(t) => QueryContent::Type(t.to_minimal()),
+                QueryContent::Trait(t) => QueryContent::Trait(t.to_minimal()),
+            },
         }
     }
 }
@@ -148,6 +179,19 @@ impl TypeResult {
     /// Add a trait implementation to the type result
     pub fn add_trait_impl(&mut self, trait_impl: TraitImplOutput) {
         self.trait_implementations.push(trait_impl);
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            kind: self.kind.clone(),
+            methods: self.methods.iter().map(|m| m.to_minimal()).collect(),
+            trait_implementations: self
+                .trait_implementations
+                .iter()
+                .map(|t| t.to_minimal())
+                .collect(),
+        }
     }
 }
 
@@ -176,6 +220,17 @@ impl TraitResult {
     /// Add a provided method to the trait result
     pub fn add_provided_method(&mut self, method: String) {
         self.provided_methods.push(method);
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            path: self.path.clone(),
+            methods: self.methods.iter().map(|m| m.to_minimal()).collect(),
+            associated_types: self.associated_types.clone(),
+            provided_methods: Vec::new(), // Omit provided methods
+        }
     }
 }
 
@@ -209,6 +264,19 @@ impl MethodOutput {
     pub fn with_is_trait_method(mut self, is_trait_method: bool) -> Self {
         self.is_trait_method = is_trait_method;
         self
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            signature: self.signature.clone(),
+            return_type: self.return_type.clone(),
+            visibility: self.visibility.clone(),
+            is_public: self.is_public,
+            docs: None,                                                    // Omit docs
+            is_trait_method: self.is_trait_method && self.is_trait_method, // Only keep if true
+        }
     }
 }
 
@@ -261,5 +329,16 @@ impl TraitImplOutput {
     pub fn with_generic_args(mut self, generic_args: Option<String>) -> Self {
         self.generic_args = generic_args;
         self
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            trait_name: self.trait_name.clone(),
+            trait_path: self.trait_path.clone(),
+            methods: self.methods.iter().map(|m| m.to_minimal()).collect(),
+            provided_methods: Vec::new(), // Omit provided methods
+            generic_args: None,           // Omit generic args
+        }
     }
 }

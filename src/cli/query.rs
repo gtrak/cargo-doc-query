@@ -34,6 +34,14 @@ pub struct QueryCommand {
     /// Which kind of query (methods, traits, types, all)
     #[arg(long, default_value = "all")]
     kind: QueryKindArg,
+
+    /// Output minimal representation (signatures only, no docs)
+    #[arg(long)]
+    minimal: bool,
+
+    /// Maximum tokens in output (approximate)
+    #[arg(long)]
+    tokens: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,12 +86,16 @@ impl QueryCommand {
         crate_name: Option<String>,
         include: Vec<String>,
         kind: QueryKindArg,
+        minimal: bool,
+        tokens: Option<usize>,
     ) -> Self {
         Self {
             path,
             crate_name,
             include,
             kind,
+            minimal,
+            tokens,
         }
     }
 
@@ -102,11 +114,23 @@ impl QueryCommand {
         QueryOptions::new(kind)
             .with_docs(include_docs)
             .with_private(include_private)
+            .with_minimal(self.minimal)
+            .with_token_budget(self.tokens)
     }
 }
 
 impl Command for QueryCommand {
     fn execute(&self) -> Result<()> {
+        // Validate token budget
+        if let Some(tokens) = self.tokens {
+            if tokens < 100 {
+                return Err(anyhow::anyhow!(
+                    "Token budget too small, minimum is 100 (got {})",
+                    tokens
+                ));
+            }
+        }
+
         // Discover manifest path (default to current directory)
         let manifest_path = std::env::current_dir()
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -164,12 +188,29 @@ impl Command for QueryCommand {
         let options = self.parse_options();
 
         // Execute query
-        let response = engine
+        let mut response = engine
             .query(&self.path, &options, self.crate_name.as_deref())
             .context("Query failed")?;
 
         let duration = start.elapsed();
-        eprintln!("Query completed in {}ms", duration.as_millis());
+
+        // Check token budget if set
+        if let Some(budget) = self.tokens {
+            let token_count = response.estimate_tokens();
+            if token_count > budget {
+                eprintln!(
+                    "⚠ Warning: Token budget exceeded ({} > {} tokens)",
+                    token_count, budget
+                );
+            }
+            eprintln!(
+                "Query completed in {}ms ({} tokens)",
+                duration.as_millis(),
+                token_count
+            );
+        } else {
+            eprintln!("Query completed in {}ms", duration.as_millis());
+        }
 
         // Output JSON
         let json_output = serde_json::to_string_pretty(&response)

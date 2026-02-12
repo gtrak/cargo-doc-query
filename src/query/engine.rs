@@ -17,6 +17,8 @@ pub struct QueryOptions {
     kind: QueryKind,
     include_docs: bool,
     include_private: bool,
+    minimal_mode: bool,
+    token_budget: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +36,8 @@ impl QueryOptions {
             kind,
             include_docs: false,
             include_private: false,
+            minimal_mode: false,
+            token_budget: None,
         }
     }
 
@@ -46,6 +50,18 @@ impl QueryOptions {
     /// Set include_private flag
     pub fn with_private(mut self, include_private: bool) -> Self {
         self.include_private = include_private;
+        self
+    }
+
+    /// Set minimal_mode flag
+    pub fn with_minimal(mut self, minimal: bool) -> Self {
+        self.minimal_mode = minimal;
+        self
+    }
+
+    /// Set token_budget
+    pub fn with_token_budget(mut self, budget: Option<usize>) -> Self {
+        self.token_budget = budget;
         self
     }
 }
@@ -170,6 +186,11 @@ impl QueryEngine {
         let mut response = QueryResponse::new(path.to_string());
         for match_ in matches {
             response.add_match(match_);
+        }
+
+        // Apply minimal mode if requested
+        if options.minimal_mode {
+            response = response.to_minimal();
         }
 
         Ok(response)
