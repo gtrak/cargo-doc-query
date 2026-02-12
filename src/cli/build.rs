@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use crate::cache::key::CacheKeyInputs;
 use crate::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
-use crate::cargo::dependencies::get_workspace_dependencies;
 use crate::cli::Command;
 use crate::index::graph::{CrateGraph, CrateNode};
 use crate::parser::validate::validate_format_version;
@@ -25,33 +24,31 @@ impl BuildCommand {
 
     fn generate_rustdoc_json(
         &self,
-        deps: &[(String, String, Utf8PathBuf)], // Use Utf8PathBuf from cargo_metadata
+        _deps: &[(String, String, Utf8PathBuf)], // Not used - use workspace manifest for all
     ) -> Result<Vec<(String, String, PathBuf)>> {
         let mut paths = Vec::new();
 
-        for (name, version, manifest_path) in deps {
-            println!("Generating docs for {} v{}...", name, version);
+        println!("Generating rustdoc JSON for workspace packages...");
 
-            // Use rustdoc-json to generate documentation with package-local manifest
-            let builder = Builder::default()
-                .toolchain("nightly")
-                .manifest_path(manifest_path) // Use package's local manifest, not workspace manifest
-                .package(&format!("{}@{}", name, version));
+        // Use rustdoc-json with workspace manifest to document all workspace members
+        // The package name is not needed when using workspace manifest - rustdoc handles it
+        let builder = Builder::default()
+            .toolchain("nightly")
+            .manifest_path(&self.manifest_path);
 
-            let builder = if self.all_features {
-                builder.all_features(true)
-            } else {
-                builder
-            };
+        let builder = if self.all_features {
+            builder.all_features(true)
+        } else {
+            builder
+        };
 
-            match builder.build() {
-                Ok(path) => {
-                    paths.push((name.clone(), version.clone(), path));
-                }
-                Err(e) => {
-                    eprintln!("Warning: Failed to document {}: {}", name, e);
-                    // Continue with other crates - don't fail entire build
-                }
+        match builder.build() {
+            Ok(path) => {
+                println!("Successfully generated rustdoc JSON: {}", path.display());
+                paths.push(("workspace".to_string(), "workspace".to_string(), path));
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("Failed to generate rustdoc JSON: {}", e));
             }
         }
 
@@ -60,7 +57,7 @@ impl BuildCommand {
 
     fn generate_serializable_index(
         &self,
-        deps: &[(String, String, Utf8PathBuf)], // Accept manifest paths
+        _deps: &[(String, String, Utf8PathBuf)],
         json_paths: &[(String, String, PathBuf)],
     ) -> SerializableIndex {
         // Convert graph to serializable format
@@ -104,18 +101,12 @@ impl Command for BuildCommand {
 
         println!("No valid cache found, building index...");
 
-        // 3. Discover dependencies (BUILD-02)
-        let deps = get_workspace_dependencies(&self.manifest_path)
-            .context("Failed to discover dependencies")?;
+        // 3. Generate rustdoc JSON for workspace (BUILD-02)
+        let json_paths = self.generate_rustdoc_json(&[])?;
 
-        println!("Found {} dependencies to document", deps.len());
+        println!("Generated rustdoc JSON");
 
-        // 4. Generate rustdoc JSON for each dependency
-        let json_paths = self.generate_rustdoc_json(&deps)?;
-
-        println!("Generated rustdoc JSON for {} crates", json_paths.len());
-
-        // 5. Parse and validate each JSON file (BUILD-05)
+        // 4. Parse and validate the JSON file (BUILD-05)
         let mut graph = CrateGraph::new();
         let json_paths_refs: Vec<_> = json_paths.iter().collect();
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
@@ -139,8 +130,8 @@ impl Command for BuildCommand {
 
         println!("Successfully indexed {} crates", graph.crate_count());
 
-        // 6. Save to cache (CACHE-03)
-        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
+        // 5. Save to cache (CACHE-03)
+        let mut serializable = self.generate_serializable_index(&[], &json_paths);
         serializable.cache_key = cache_key.clone();
         cache_store.save(&cache_key, &serializable)?;
         println!("Index cached successfully");

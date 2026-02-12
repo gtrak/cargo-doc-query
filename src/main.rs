@@ -36,7 +36,17 @@ fn main() {
     let cli = Cli::parse();
     match &cli.command {
         Commands::Build => {
-            let manifest_path = std::path::PathBuf::from(&cli.manifest);
+            // Convert manifest path to absolute path and resolve to Cargo.toml if needed
+            let mut manifest_path = std::path::PathBuf::from(&cli.manifest);
+            if manifest_path.as_os_str().is_empty() {
+                manifest_path = std::env::current_dir().expect("Cannot get current directory");
+            }
+
+            // If it's a directory, resolve to Cargo.toml inside it
+            if manifest_path.is_dir() {
+                manifest_path.push("Cargo.toml");
+            }
+
             BuildCommand::new(manifest_path, cli.all_features)
                 .execute()
                 .expect("Build failed");
