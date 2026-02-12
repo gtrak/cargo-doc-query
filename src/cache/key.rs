@@ -6,6 +6,7 @@ use std::path::Path;
 /// Inputs that affect the documentation index output
 #[derive(Debug)]
 pub struct CacheKeyInputs {
+    cargo_toml_content: Vec<u8>,      // Hash of Cargo.toml
     cargo_lock_content: Vec<u8>,      // Hash of Cargo.lock
     rustc_version: String,            // rustc --version output
     target_triple: String,            // Target platform triple
@@ -16,6 +17,9 @@ pub struct CacheKeyInputs {
 impl CacheKeyInputs {
     /// Create CacheKeyInputs from the project
     pub fn from_project(manifest_path: &Path) -> Result<Self> {
+        // Read Cargo.toml content
+        let cargo_toml_content = std::fs::read(manifest_path).unwrap_or_default();
+
         // Read Cargo.lock content
         let cargo_lock_path = manifest_path
             .parent()
@@ -37,6 +41,7 @@ impl CacheKeyInputs {
         let features = BTreeMap::new();
 
         Ok(Self {
+            cargo_toml_content,
             cargo_lock_content,
             rustc_version,
             target_triple,
@@ -50,7 +55,8 @@ impl CacheKeyInputs {
         let mut hasher = Hasher::new();
 
         // Hash all inputs deterministically
-        hasher.update(&self.cargo_lock_content);
+        hasher.update(&self.cargo_lock_content); // Cargo.lock first (existing)
+        hasher.update(&self.cargo_toml_content); // Cargo.toml next (new)
         hasher.update(self.rustc_version.as_bytes());
         hasher.update(self.target_triple.as_bytes());
         hasher.update(self.rustdoc_types_version.as_bytes());
