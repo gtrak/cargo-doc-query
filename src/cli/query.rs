@@ -3,8 +3,11 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::str::FromStr;
+use std::time::Instant;
 
+use crate::cache::key::CacheKeyInputs;
 use crate::cache::store::CacheStore;
+use crate::cli::build::BuildCommand;
 use crate::cli::Command;
 use crate::query::engine::{QueryEngine, QueryKind, QueryOptions};
 
@@ -104,14 +107,55 @@ impl QueryCommand {
 
 impl Command for QueryCommand {
     fn execute(&self) -> Result<()> {
-        // Load index from cache
+        // Discover manifest path (default to current directory)
+        let manifest_path = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("Cargo.toml");
+
+        // Generate expected cache key from manifest files
+        let cache_inputs = CacheKeyInputs::from_project(&manifest_path)
+            .context("Failed to create cache key inputs")?;
+        let expected_key = cache_inputs.generate_key();
+
+        // Check if rebuild is needed
         let cache_store = CacheStore::new().context("Failed to initialize cache store")?;
 
-        let index = cache_store.load_current()?.ok_or_else(|| {
-            anyhow::anyhow!("No cached index found. Run 'cargo doc-query build' first.")
-        })?;
+        let index = if let Some(current_index) = cache_store.load_current()? {
+            // Compare cache keys
+            if current_index.cache_key != expected_key {
+                println!("Manifest changed, rebuilding index...");
+                let build_cmd = BuildCommand::new(
+                    manifest_path.with_file_name("Cargo.toml"),
+                    false, // Use default features
+                );
+                build_cmd.execute().context("Rebuild failed")?;
+                // Reload index after rebuild
+                cache_store
+                    .load(&expected_key)
+                    .context("Failed to load rebuilt index")?
+                    .ok_or_else(|| anyhow::anyhow!("No cached index found after rebuild"))?
+            } else {
+                // Cache key matches, use current index
+                current_index
+            }
+        } else {
+            // No cache exists, need to build
+            println!("No index found, building...");
+            let build_cmd = BuildCommand::new(
+                manifest_path.with_file_name("Cargo.toml"),
+                false, // Use default features
+            );
+            build_cmd.execute().context("Build failed")?;
+            cache_store
+                .load(&expected_key)
+                .context("Failed to load built index")?
+                .ok_or_else(|| anyhow::anyhow!("No cached index found after build"))?
+        };
 
         println!("Loaded index ({} crates)", index.nodes.len());
+
+        // Time the query execution
+        let start = Instant::now();
 
         // Create query engine
         let mut engine = QueryEngine::new(index);
@@ -123,6 +167,9 @@ impl Command for QueryCommand {
         let response = engine
             .query(&self.path, &options, self.crate_name.as_deref())
             .context("Query failed")?;
+
+        let duration = start.elapsed();
+        eprintln!("Query completed in {}ms", duration.as_millis());
 
         // Output JSON
         let json_output = serde_json::to_string_pretty(&response)
