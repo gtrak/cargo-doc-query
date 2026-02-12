@@ -1,15 +1,15 @@
 # Project State: cargo-doc-query
 
-**Current Phase:** 1 — Foundation (JSON Ingestion & Index)
-**Phase Status:** 🔄 In progress
+**Current Phase:** 2 — Core Querying (Methods & Traits)
+**Phase Status:** ⏸️ Verification pending
 **Last Updated:** 2026-02-12
 
 ---
 
 ## Current Position
 
-**Working on:** Phase 1 — Foundation
-**Next milestone:** Phase 1 success criteria completion
+**Working on:** Phase 2 — Core Querying (plans 02-01 through 02-04 complete, 02-05 requires human verification)
+**Next milestone:** Phase 2 success criteria verification
 
 ### Phase 1 Progress
 
@@ -23,13 +23,28 @@
 
 **Progress:** ██████████░ 90% (Plans 01-04 complete)
 
+**Status:** ✅ Complete (2026-02-12)
+
+### Phase 2 Progress
+
+| Success Criterion | Status |
+|-------------------|--------|
+| User can query methods for any type | ⏳ Pending verification |
+| Method output includes signature and return types | ✅ Implemented |
+| User can query trait implementations for any type | ⏳ Pending verification |
+| Trait output includes associated types and methods | ✅ Implemented |
+| Query responses are valid, parseable JSON | ✅ Implemented |
+| Command output can be piped to other tools | ⏳ Pending verification |
+
+**Progress:** ██████████░ 80% (Plans 02-04 complete, 02-05 needs human verification)
+
 ---
 
 ## Active Plan
 
-**Plan:** 01-05 (next planned in foundation phase)
-**Status:** Ready to plan
-**Last activity:** 2026-02-12 - Completed 01-04-SUMMARY.md
+**Plan:** 02-05 - End-to-end verification (checkpoint)
+**Status:** Ready for human verification
+**Last activity:** 2026-02-12 - Completed 02-04-SUMMARY.md
 
 ### Completed Plans
 
@@ -39,13 +54,6 @@
 | 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
 | 01-03 | Cache persistence | cd35fbe | BLAKE3 key generation, postcard serialization, cache store integration |
 | 01-04 | Gap closure - manifest resolution | e13ab03 | Fixed rustdoc-json manifest resolution, filtered external dependencies, graceful error handling |
-
-### Completed Plans
-
-| Plan | Name | Commit | Summary |
-| ---- | ---- | ------ | ------- |
-| 01-01 | CLI foundation | d1e47d2 | Command trait, clap CLI, module structure |
-| 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
 
 ### Completed Tasks (All Plans)
 
@@ -144,11 +152,11 @@ None
 ### Session Handoff Notes
 
 If resuming work:
-1. Current phase: Phase 1 (Foundation)
-2. Active plan: Plans 01-01 through 01-04 complete, ready for next phase (01-05 or Phase 2)
-3. Cache is working: users can run `cargo doc-query build` with caching for 80+ external dependencies
-4. Graph relationships not yet populated (Phase 02 work)
-5. BUILD-01 and BUILD-02 requirements verified (cargo doc-query build succeeds, no virtual manifest errors)
+1. Current phase: Phase 2 (Core Querying)
+2. Active plan: Starting Phase 2 execution with 5 plans
+3. Foundation is complete: users can run `cargo doc-query build` with caching for 80+ external dependencies
+4. Graph relationships not yet populated (Phase 02 work will populate them)
+5. BUILD-01, BUILD-02, and BUILD-05 requirements verified (cargo doc-query build succeeds, format validation works)
 
 ---
 
@@ -159,7 +167,7 @@ If resuming work:
 | Query latency (cached) | — | <100ms |
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 5/18 | 18/18 |
-| Phases complete | 1/5 | 5/5 |
+| Phases complete | 1/5 (Phase 1) | 5/5 |
 
 ---
 
