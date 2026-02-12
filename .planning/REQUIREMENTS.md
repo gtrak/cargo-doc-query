@@ -16,11 +16,11 @@
 
 ### Build & Index
 
-- [ ] **BUILD-01**: User can run `cargo doc-query build` to generate documentation index
-- [ ] **BUILD-02**: Build command generates rustdoc JSON for all dependencies
+- [x] **BUILD-01**: User can run `cargo doc-query build` to generate documentation index
+- [x] **BUILD-02**: Build command generates rustdoc JSON for all dependencies
 - [ ] **BUILD-03**: Index is cached to disk for sub-100ms query performance
 - [ ] **BUILD-04**: Index automatically rebuilds when Cargo.lock changes
-- [ ] **BUILD-05**: Build handles format version checking for rustdoc JSON compatibility
+- [x] **BUILD-05**: Build handles format version checking for rustdoc JSON compatibility
 
 ### Traits & Types
 
@@ -79,11 +79,11 @@
 | QUERY-04 | Phase 4 | Pending |
 | QUERY-05 | Phase 4 | Pending |
 | QUERY-06 | Phase 4 | Pending |
-| BUILD-01 | Phase 1 | Pending |
-| BUILD-02 | Phase 1 | Pending |
+| BUILD-01 | Phase 1 | Complete |
+| BUILD-02 | Phase 1 | Complete |
 | BUILD-03 | Phase 3 | Pending |
 | BUILD-04 | Phase 3 | Pending |
-| BUILD-05 | Phase 1 | Pending |
+| BUILD-05 | Phase 1 | Complete |
 | TRAIT-01 | Phase 2 | Pending |
 | TRAIT-02 | Phase 2 | Pending |
 | TYPE-01 | Phase 4 | Pending |

@@ -17,27 +17,30 @@ A 5-phase roadmap delivering a Cargo subcommand for fast, structured API queries
 **Dependencies:** None (foundational phase)
 
 **Requirements:**
-- BUILD-01: `cargo doc-query build` command
-- BUILD-02: Generate rustdoc JSON for all dependencies
-- BUILD-05: Format version checking for rustdoc JSON compatibility
+- BUILD-01: `cargo doc-query build` command ✅
+- BUILD-02: Generate rustdoc JSON for all dependencies ✅
+- BUILD-05: Format version checking for rustdoc JSON compatibility ✅
 
 **Success Criteria:**
-1. User can run `cargo doc-query build` to generate documentation index
-2. Build command successfully generates rustdoc JSON for all workspace dependencies
-3. Format version is validated before processing; incompatible versions fail fast with clear error
-4. Index structure (graph-based) is created and persisted to disk
+1. User can run `cargo doc-query build` to generate documentation index ✅
+2. Build command successfully generates rustdoc JSON for all workspace dependencies ✅
+3. Format version is validated before processing; incompatible versions fail fast with clear error ✅
+4. Index structure (graph-based) is created and persisted to disk ✅
 
 **Key Risks Addressed:**
 - Format Version Blindness (validated via rustdoc-types)
 - Multiple Package Version Output Collision
-- Rustdoc failures handled gracefully
+- Rustdoc failures handled gracefully ✅
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 **Plan list:**
 - [x] 01-01-PLAN.md — CLI foundation, dependencies, Command trait
 - [x] 01-02-PLAN.md — Dependency discovery, rustdoc JSON generation, format validation, graph index
 - [x] 01-03-PLAN.md — Cache persistence with postcard/BLAKE3
+- [x] 01-04-PLAN.md — Gap closure: manifest resolution fix
+
+**Status:** ✅ Complete (2026-02-12)
 
 ---
 
@@ -138,14 +141,14 @@ A 5-phase roadmap delivering a Cargo subcommand for fast, structured API queries
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|--------------|---------------------|
-| 1 - Foundation | 📋 Planned | 3/18 | 0/4 |
+| 1 - Foundation | ✅ Complete | 3/18 | 4/4 |
 | 2 - Core Querying | ⏳ Pending | 7/18 | 0/6 |
 | 3 - Performance | ⏳ Pending | 2/18 | 0/4 |
 | 4 - Advanced Features | ⏳ Pending | 6/18 | 0/5 |
 | 5 - Integration & Polish | ⏳ Pending | 0/18 | 0/5 |
 
 **Coverage:** 18/18 v1 requirements mapped ✓  
-**Completion:** 0/5 phases complete
+**Completion:** 1/5 phases complete
 
 ---
 
