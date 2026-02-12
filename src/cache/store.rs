@@ -56,4 +56,48 @@ impl CacheStore {
 
         Ok(Some(index))
     }
+
+    /// Load the most recent index from cache (latest cache file)
+    pub fn load_current(&self) -> Result<Option<SerializableIndex>> {
+        let entries =
+            std::fs::read_dir(&self.cache_dir).context("Failed to read cache directory")?;
+
+        let mut latest_mtime: Option<std::time::SystemTime> = None;
+        let mut latest_path: Option<PathBuf> = None;
+
+        for entry in entries {
+            let entry = entry.context("Failed to read cache entry")?;
+            let path = entry.path();
+
+            if path.extension().and_then(|s| s.to_str()) == Some("idx") {
+                let metadata = entry.metadata().context("Failed to read file metadata")?;
+
+                let mtime = metadata
+                    .modified()
+                    .context("Failed to get modification time")?;
+
+                match &latest_mtime {
+                    None => {
+                        latest_mtime = Some(mtime);
+                        latest_path = Some(path);
+                    }
+                    Some(current_latest) => {
+                        if mtime > *current_latest {
+                            latest_mtime = Some(mtime);
+                            latest_path = Some(path);
+                        }
+                    }
+                }
+            }
+        }
+
+        match latest_path {
+            Some(path) => {
+                let data = std::fs::read(&path).context("Failed to read cache file")?;
+                let index = from_bytes(&data).context("Failed to deserialize index")?;
+                Ok(Some(index))
+            }
+            None => Ok(None),
+        }
+    }
 }
