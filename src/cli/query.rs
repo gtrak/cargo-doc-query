@@ -96,11 +96,9 @@ impl QueryCommand {
             QueryKindArg::All => QueryKind::All,
         };
 
-        QueryOptions {
-            kind,
-            include_docs,
-            include_private,
-        }
+        QueryOptions::new(kind)
+            .with_docs(include_docs)
+            .with_private(include_private)
     }
 }
 
