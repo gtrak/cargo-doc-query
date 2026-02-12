@@ -151,13 +151,56 @@ Plan list:
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|--------------|---------------------|
 | 1 - Foundation | ✅ Complete | 3/18 | 4/4 |
-| 2 - Core Querying | ⏳ Pending | 7/18 | 0/6 |
+| 2 - Core Querying | ⏸️ Verification Pending | 7/18 | 0/6 |
 | 3 - Performance | ⏳ Pending | 2/18 | 0/4 |
 | 4 - Advanced Features | ⏳ Pending | 6/18 | 0/5 |
 | 5 - Integration & Polish | ⏳ Pending | 0/18 | 0/5 |
 
-**Coverage:** 18/18 v1 requirements mapped ✓  
+**Coverage:** 18/18 v1 requirements mapped ✓
 **Completion:** 1/5 phases complete
+
+---
+
+## v1.1 Enhancements
+
+**Target:** Post-v1.0 optimization and space reduction
+
+**Enhancement 1: Shared Cache Directory**
+
+**Problem:**
+- Each project generates duplicate JSON for same dependencies (e.g., serde, tokio)
+- Project A: target/doc-query/[hash].idx (80+ json files, ~50MB)
+- Project B: target/doc-query/[hash].idx (80+ json files, ~50MB)
+- Massive waste of disk space and build time
+
+**Solution:**
+```
+~/.cargo/doc-query/
+├── shared/
+│   └── [serde:1.0+].json
+│   └── [tokio:1.0+].json
+│   └── [std:nightly-2025-02-12].json
+├── project-a/
+│   └── [project-hash].idx (references shared JSON paths)
+└── project-b/
+    └── [project-hash].idx (references shared JSON paths)
+```
+
+**Benefits:**
+- Massive space savings (common deps deduplicated)
+- Faster builds (skip JSON generation if already in shared cache)
+- Team/machine-wide sharing across projects
+
+**Implementation:**
+- Add `cargo doc-query config --shared-cache <dir>` command
+- Default: `~/.cargo/doc-query/shared/`
+- Check shared cache before generating JSON
+- Store absolute paths to shared JSON in index
+- Add garbage collection command (`cargo doc-query gc`)
+
+**Complexity:** Low-medium (path management, cache expiry, garbage collection)
+
+**Status:** ⏳ Pending v1.0 completion
 
 ---
 
