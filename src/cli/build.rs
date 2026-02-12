@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use camino::Utf8PathBuf;
 use rustdoc_json::Builder;
 use std::path::PathBuf;
 
@@ -24,17 +25,17 @@ impl BuildCommand {
 
     fn generate_rustdoc_json(
         &self,
-        deps: &[(String, String)],
+        deps: &[(String, String, Utf8PathBuf)], // Use Utf8PathBuf from cargo_metadata
     ) -> Result<Vec<(String, String, PathBuf)>> {
         let mut paths = Vec::new();
 
-        for (name, version) in deps {
+        for (name, version, manifest_path) in deps {
             println!("Generating docs for {} v{}...", name, version);
 
-            // Use rustdoc-json to generate documentation
+            // Use rustdoc-json to generate documentation with package-local manifest
             let builder = Builder::default()
                 .toolchain("nightly")
-                .manifest_path(&self.manifest_path)
+                .manifest_path(manifest_path) // Use package's local manifest, not workspace manifest
                 .package(&format!("{}@{}", name, version));
 
             let builder = if self.all_features {
@@ -59,7 +60,7 @@ impl BuildCommand {
 
     fn generate_serializable_index(
         &self,
-        _deps: &[(String, String)],
+        deps: &[(String, String, Utf8PathBuf)], // Accept manifest paths
         json_paths: &[(String, String, PathBuf)],
     ) -> SerializableIndex {
         // Convert graph to serializable format
