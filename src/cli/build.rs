@@ -350,25 +350,14 @@ impl Command for BuildCommand {
 
         println!("No valid cache found, building index...");
 
-        // 4. Generate rustdoc JSON for stdlib
-        let stdlib_json_paths = self
-            .generate_stdlib_json()
-            .context("Failed to generate stdlib JSON")?;
-
-        // 5. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
+        // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
         let json_paths = self.generate_rustdoc_json(&deps)?;
 
         println!("Generated rustdoc JSON");
 
-        // 6. Combine stdlib and external dependencies for index
-        let all_json_paths: Vec<_> = stdlib_json_paths
-            .into_iter()
-            .chain(json_paths.into_iter())
-            .collect();
-
-        // 7. Parse and validate all JSON files
+        // 5. Parse and validate all JSON files
         let mut graph = CrateGraph::new();
-        let json_paths_refs: Vec<_> = all_json_paths.iter().collect();
+        let json_paths_refs: Vec<_> = json_paths.iter().collect();
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
             println!("Processing {} v{}...", pkg_name, pkg_version);
 
@@ -391,7 +380,7 @@ impl Command for BuildCommand {
         println!("Successfully indexed {} crates", graph.crate_count());
 
         // 8. Save to cache (CACHE-03)
-        let mut serializable = self.generate_serializable_index(&deps, &all_json_paths);
+        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
         serializable.cache_key = cache_key.clone();
         cache_store.save(&cache_key, &serializable)?;
         println!("Index cached successfully");
