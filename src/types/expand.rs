@@ -2,6 +2,52 @@
 
 use serde::Serialize;
 
+/// Configuration for token budget and output mode
+#[derive(Debug, Clone)]
+pub struct TokenConfig {
+    /// Maximum token budget (None = unlimited)
+    pub budget: Option<usize>,
+    /// Output minimal representation
+    pub minimal_mode: bool,
+    /// Warning threshold (0.0-1.0, default 0.8)
+    pub warning_threshold: f32,
+}
+
+impl Default for TokenConfig {
+    fn default() -> Self {
+        Self {
+            budget: None,
+            minimal_mode: false,
+            warning_threshold: 0.8,
+        }
+    }
+}
+
+impl TokenConfig {
+    /// Create new config with unlimited budget
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set token budget
+    pub fn with_budget(mut self, budget: Option<usize>) -> Self {
+        self.budget = budget;
+        self
+    }
+
+    /// Set minimal mode
+    pub fn with_minimal(mut self, minimal: bool) -> Self {
+        self.minimal_mode = minimal;
+        self
+    }
+
+    /// Set warning threshold
+    pub fn with_threshold(mut self, threshold: f32) -> Self {
+        self.warning_threshold = threshold;
+        self
+    }
+}
+
 /// Top-level expansion result
 #[derive(Serialize, Debug)]
 pub struct ExpansionResult {
@@ -10,10 +56,43 @@ pub struct ExpansionResult {
     /// List of paths that hit cycle detection limits
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub cycles_detected: Vec<String>,
+    /// Estimated token count for this result
+    pub token_count: usize,
+    /// Whether the budget was exceeded
+    pub budget_exceeded: bool,
+    /// Paths that were truncated due to budget
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub truncated_paths: Vec<String>,
+}
+
+impl ExpansionResult {
+    /// Create new expansion result
+    pub fn new(graph: TypeGraph) -> Self {
+        let token_count = graph.estimate_tokens();
+        Self {
+            graph,
+            cycles_detected: Vec::new(),
+            token_count,
+            budget_exceeded: false,
+            truncated_paths: Vec::new(),
+        }
+    }
+
+    /// Set budget exceeded flag and truncated paths
+    pub fn with_truncation(mut self, truncated: Vec<String>) -> Self {
+        self.budget_exceeded = !truncated.is_empty();
+        self.truncated_paths = truncated;
+        self
+    }
+
+    /// Update token count after modification
+    pub fn update_token_count(&mut self) {
+        self.token_count = self.graph.estimate_tokens();
+    }
 }
 
 /// Top-level expansion result containing type graph and metadata
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, Clone)]
 pub struct TypeGraph {
     /// The path that was expanded
     pub root: String,
@@ -43,6 +122,32 @@ pub struct TypeNode {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub generic_params: Vec<String>,
     /// Depth from root type
+    pub depth: u32,
+    /// Field count (for minimal mode reference)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_count: Option<usize>,
+    /// Variant count (for minimal mode reference)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant_count: Option<usize>,
+}
+
+/// Minimal version of TypeNode for reduced output
+#[derive(Serialize, Debug, Clone)]
+pub struct MinimalTypeNode {
+    /// Fully qualified path
+    pub id: String,
+    /// Type kind
+    pub kind: String,
+    /// Number of fields (if struct-like)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_count: Option<usize>,
+    /// Number of variants (if enum)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant_count: Option<usize>,
+    /// Generic parameter count
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generic_count: Option<usize>,
+    /// Depth from root
     pub depth: u32,
 }
 
@@ -86,7 +191,7 @@ impl TypeGraph {
 
     /// Add a type node to the graph
     /// Returns the node ID for reference linking
-    pub fn add_node(&mut self, mut node: TypeNode) -> String {
+    pub fn add_node(&mut self, node: TypeNode) -> String {
         let id = node.id.clone();
         self.nodes.push(node);
         id
@@ -95,6 +200,24 @@ impl TypeGraph {
     /// Record a detected cycle
     pub fn add_cycle(&mut self, path: String) {
         self.cycles_detected.push(path);
+    }
+
+    /// Estimate token count (rough approximation: JSON string length / 4)
+    pub fn estimate_tokens(&self) -> usize {
+        match serde_json::to_string(self) {
+            Ok(json) => json.len() / 4,
+            Err(_) => 0,
+        }
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            depth_limit: self.depth_limit,
+            nodes: self.nodes.iter().map(|n| n.to_minimal()).collect(),
+            cycles_detected: self.cycles_detected.clone(),
+        }
     }
 }
 
@@ -108,6 +231,8 @@ impl TypeNode {
             variants: Vec::new(),
             generic_params: Vec::new(),
             depth,
+            field_count: None,
+            variant_count: None,
         }
     }
 
@@ -124,6 +249,28 @@ impl TypeNode {
     /// Add a generic parameter
     pub fn add_generic_param(&mut self, param: String) {
         self.generic_params.push(param);
+    }
+
+    /// Convert to minimal representation (counts only, no details)
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            kind: self.kind.clone(),
+            fields: Vec::new(),         // Omit field details
+            variants: Vec::new(),       // Omit variant details
+            generic_params: Vec::new(), // Omit generic details
+            depth: self.depth,
+            field_count: Some(self.fields.len()),
+            variant_count: Some(self.variants.len()),
+        }
+    }
+
+    /// Estimate tokens for this node
+    pub fn estimate_tokens(&self) -> usize {
+        match serde_json::to_string(self) {
+            Ok(json) => json.len() / 4,
+            Err(_) => 50, // Default estimate
+        }
     }
 }
 

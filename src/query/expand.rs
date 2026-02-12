@@ -1,4 +1,4 @@
-// Recursive type expansion with cycle detection
+// Recursive type expansion with cycle detection and token budgeting
 
 use anyhow::Result;
 use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use crate::cache::store::SerializableIndex;
 use crate::query::lookup::PathResolver;
-use crate::types::expand::{ExpansionResult, FieldInfo, TypeGraph, TypeNode};
+use crate::types::expand::{ExpansionResult, FieldInfo, TokenConfig, TypeGraph, TypeNode};
 
 pub struct TypeExpander {
     index: SerializableIndex,
@@ -15,16 +15,28 @@ pub struct TypeExpander {
     visited: HashSet<Id>,
     current_depth: u32,
     depth_limit: u32,
+    token_config: TokenConfig,
+    current_token_count: usize,
+    truncated: Vec<String>,
 }
 
 impl TypeExpander {
+    /// Create new expander with default config
     pub fn new(index: SerializableIndex, depth_limit: u32) -> Self {
+        Self::with_config(index, depth_limit, TokenConfig::default())
+    }
+
+    /// Create new expander with custom config
+    pub fn with_config(index: SerializableIndex, depth_limit: u32, config: TokenConfig) -> Self {
         Self {
             index,
             crates: HashMap::new(),
             visited: HashSet::new(),
             current_depth: 0,
             depth_limit,
+            token_config: config,
+            current_token_count: 0,
+            truncated: Vec::new(),
         }
     }
 
@@ -57,6 +69,30 @@ impl TypeExpander {
 
         self.crates.insert(key, krate);
         Ok(())
+    }
+
+    /// Check if adding more tokens would exceed budget
+    fn would_exceed_budget(&self, additional_tokens: usize) -> bool {
+        match self.token_config.budget {
+            None => false,
+            Some(budget) => self.current_token_count + additional_tokens > budget,
+        }
+    }
+
+    /// Check if approaching budget warning threshold
+    fn is_approaching_budget(&self) -> bool {
+        match self.token_config.budget {
+            None => false,
+            Some(budget) => {
+                let threshold = (budget as f32 * self.token_config.warning_threshold) as usize;
+                self.current_token_count >= threshold
+            }
+        }
+    }
+
+    /// Add tokens to current count
+    fn add_tokens(&mut self, count: usize) {
+        self.current_token_count += count;
     }
 
     pub fn expand(&mut self, path: &str, crate_filter: Option<&str>) -> Result<ExpansionResult> {
@@ -110,6 +146,8 @@ impl TypeExpander {
                     | ItemEnum::Union(_)
                     | ItemEnum::TypeAlias(_) => {
                         if let Some(node) = self.expand_item(&id, 0)? {
+                            // Update token count for the node
+                            self.add_tokens(node.estimate_tokens());
                             graph.add_node(node);
                         }
                     }
@@ -127,10 +165,20 @@ impl TypeExpander {
             return Err(anyhow::anyhow!("No items found matching path: {}", path));
         }
 
-        Ok(ExpansionResult {
-            graph,
-            cycles_detected: Vec::new(),
-        })
+        // Convert to minimal if requested
+        let graph = if self.token_config.minimal_mode {
+            graph.to_minimal()
+        } else {
+            graph
+        };
+
+        let mut result = ExpansionResult::new(graph);
+
+        if !self.truncated.is_empty() {
+            result = result.with_truncation(self.truncated.clone());
+        }
+
+        Ok(result)
     }
 
     fn expand_item(&mut self, item_id: &Id, depth: u32) -> Result<Option<TypeNode>> {
@@ -142,6 +190,18 @@ impl TypeExpander {
 
         if depth >= self.depth_limit {
             return Ok(None);
+        }
+
+        // Check budget before expanding
+        if let Some(budget) = self.token_config.budget {
+            if self.current_token_count >= budget {
+                // Budget exceeded - record truncation and skip
+                let path = format!("{:?}", item_id);
+                if !self.truncated.contains(&path) {
+                    self.truncated.push(path);
+                }
+                return Ok(None);
+            }
         }
 
         // Find the item in any loaded crate
@@ -325,5 +385,21 @@ pub fn expand_type(path: &str, depth: u32, crate_filter: Option<&str>) -> Result
         })?;
 
     let mut expander = TypeExpander::new(index, depth);
+    expander.expand(path, crate_filter)
+}
+
+pub fn expand_type_with_config(
+    path: &str,
+    depth: u32,
+    crate_filter: Option<&str>,
+    config: TokenConfig,
+) -> Result<ExpansionResult> {
+    let index = crate::cache::store::CacheStore::new()?
+        .load_current()?
+        .ok_or_else(|| {
+            anyhow::anyhow!("No cached index found. Run `cargo doc-query build` first.")
+        })?;
+
+    let mut expander = TypeExpander::with_config(index, depth, config);
     expander.expand(path, crate_filter)
 }

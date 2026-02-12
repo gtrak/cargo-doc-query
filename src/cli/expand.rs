@@ -5,6 +5,7 @@ use clap::Parser;
 use std::time::Instant;
 
 use crate::cli::Command;
+use crate::types::expand::TokenConfig;
 
 #[derive(Parser, Debug)]
 pub struct ExpandCommand {
@@ -18,6 +19,14 @@ pub struct ExpandCommand {
     /// Limit to specific crate
     #[arg(long)]
     crate_name: Option<String>,
+
+    /// Maximum tokens in output (approximate, default: unlimited)
+    #[arg(long)]
+    tokens: Option<usize>,
+
+    /// Output minimal representation (signatures only, no field details)
+    #[arg(long)]
+    minimal: bool,
 }
 
 impl ExpandCommand {
@@ -26,12 +35,41 @@ impl ExpandCommand {
             path,
             depth,
             crate_name,
+            tokens: None,
+            minimal: false,
+        }
+    }
+
+    /// Create from parsed arguments
+    pub fn from_args(
+        path: String,
+        depth: u32,
+        crate_name: Option<String>,
+        tokens: Option<usize>,
+        minimal: bool,
+    ) -> Self {
+        Self {
+            path,
+            depth,
+            crate_name,
+            tokens,
+            minimal,
         }
     }
 }
 
 impl Command for ExpandCommand {
     fn execute(&self) -> Result<()> {
+        // Validate token budget
+        if let Some(tokens) = self.tokens {
+            if tokens < 100 {
+                return Err(anyhow::anyhow!(
+                    "Token budget too small, minimum is 100 (got {})",
+                    tokens
+                ));
+            }
+        }
+
         // Discover manifest path (default to current directory)
         let manifest_path = std::env::current_dir()
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -78,16 +116,39 @@ impl Command for ExpandCommand {
 
         println!("Loaded index ({} crates)", index.nodes.len());
 
+        // Create token config
+        let token_config = TokenConfig::new()
+            .with_budget(self.tokens)
+            .with_minimal(self.minimal);
+
         // Time the expansion execution
         let start = Instant::now();
 
-        // Use expand_type function from query/expand module
-        let expansion =
-            crate::query::expand::expand_type(&self.path, self.depth, self.crate_name.as_deref())
-                .context("Expansion failed")?;
+        // Use expand_type_with_config for token budgeting
+        let expansion = crate::query::expand::expand_type_with_config(
+            &self.path,
+            self.depth,
+            self.crate_name.as_deref(),
+            token_config,
+        )
+        .context("Expansion failed")?;
 
         let duration = start.elapsed();
-        eprintln!("Expansion completed in {}ms", duration.as_millis());
+
+        // Print warnings if budget exceeded
+        if expansion.budget_exceeded {
+            eprintln!("⚠ Warning: Token budget exceeded. Some types were truncated.");
+            if !expansion.truncated_paths.is_empty() {
+                eprintln!("  Truncated: {:?}", expansion.truncated_paths);
+            }
+        }
+
+        // Print token count and timing to stderr
+        eprintln!(
+            "Expansion completed in {}ms ({} tokens)",
+            duration.as_millis(),
+            expansion.token_count
+        );
 
         // Output JSON
         let json_output = serde_json::to_string_pretty(&expansion)

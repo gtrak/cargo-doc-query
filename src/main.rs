@@ -74,6 +74,14 @@ enum Commands {
         /// Limit to specific crate
         #[arg(long)]
         crate_name: Option<String>,
+
+        /// Maximum tokens in output (approximate, default: unlimited)
+        #[arg(long)]
+        tokens: Option<usize>,
+
+        /// Output minimal representation (signatures only, no field details)
+        #[arg(long)]
+        minimal: bool,
     },
 }
 
@@ -117,8 +125,10 @@ fn main() {
             path,
             depth,
             crate_name,
+            tokens,
+            minimal,
         } => {
-            ExpandCommand::new(path.clone(), *depth, crate_name.clone())
+            ExpandCommand::from_args(path.clone(), *depth, crate_name.clone(), *tokens, *minimal)
                 .execute()
                 .expect("Expand failed");
         }
