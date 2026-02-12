@@ -151,11 +151,13 @@ impl TypeExpander {
                             graph.add_node(node);
                         }
                     }
+                    ItemEnum::Module(_) => {
+                        // Expand module contents
+                        self.expand_module(&id, 0, &mut graph)?;
+                    }
                     _ => {
-                        return Err(anyhow::anyhow!(
-                            "Item is not a type - cannot expand: {}",
-                            path
-                        ));
+                        // Skip items that aren't types or modules (macros, etc.)
+                        continue;
                     }
                 }
             }
@@ -331,6 +333,81 @@ impl TypeExpander {
         }
 
         Ok(Some(node))
+    }
+
+    /// Expand a module and its contents
+    fn expand_module(&mut self, module_id: &Id, depth: u32, graph: &mut TypeGraph) -> Result<()> {
+        if self.visited.contains(module_id) {
+            return Ok(());
+        }
+
+        self.visited.insert(*module_id);
+
+        if depth >= self.depth_limit {
+            return Ok(());
+        }
+
+        // Find the module in any loaded crate
+        let mut module_item: Option<Item> = None;
+        let mut krate_key: Option<String> = None;
+
+        for (key, crate_data) in &self.crates {
+            if let Some(found_item) = crate_data.index.get(module_id) {
+                module_item = Some(found_item.clone());
+                krate_key = Some(key.clone());
+                break;
+            }
+        }
+
+        let module_item = module_item.ok_or_else(|| anyhow::anyhow!("Module not found"))?;
+        let krate_key = krate_key.ok_or_else(|| anyhow::anyhow!("Crate not found"))?;
+
+        // Clone crate data to avoid borrow issues
+        let krate = self.crates.get(&krate_key).unwrap().clone();
+
+        let module_path = self.get_path(&krate, *module_id);
+        let mut node = TypeNode::new(module_path, "module".to_string(), depth);
+        let mut submodules_to_expand: Vec<Id> = Vec::new();
+
+        // Get module items
+        if let ItemEnum::Module(module) = &module_item.inner {
+            for item_id in &module.items {
+                if let Some(item) = krate.index.get(item_id) {
+                    let item_path = self.get_path(&krate, *item_id);
+                    let name = item.name.clone().unwrap_or_default();
+
+                    match &item.inner {
+                        ItemEnum::Struct(_)
+                        | ItemEnum::Enum(_)
+                        | ItemEnum::Union(_)
+                        | ItemEnum::TypeAlias(_)
+                        | ItemEnum::Trait(_)
+                        | ItemEnum::Function(_) => {
+                            // Add as module item
+                            let field_info = FieldInfo::new(name, item_path, false);
+                            node.add_field(field_info);
+                        }
+                        ItemEnum::Module(_) => {
+                            // Collect submodule IDs for later expansion
+                            if depth + 1 < self.depth_limit {
+                                submodules_to_expand.push(*item_id);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        self.add_tokens(node.estimate_tokens());
+        graph.add_node(node);
+
+        // Now expand submodules (after releasing borrows)
+        for submodule_id in submodules_to_expand {
+            self.expand_module(&submodule_id, depth + 1, graph)?;
+        }
+
+        Ok(())
     }
 
     fn format_type(&self, ty: &Type) -> String {
