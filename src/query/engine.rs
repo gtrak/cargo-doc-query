@@ -210,7 +210,14 @@ impl QueryEngine {
             ItemEnum::Impl(_) => "impl",
             ItemEnum::Constant { .. } => "constant",
             ItemEnum::Static(_) => "static",
-            _ => "unknown",
+            ItemEnum::StructField(_) => "field",
+            ItemEnum::Variant(_) => "variant",
+            ItemEnum::Macro(_) => "macro",
+            ItemEnum::ProcMacro(_) => "proc_macro",
+            ItemEnum::Use(_) => "use",
+            ItemEnum::ExternCrate { .. } => "extern_crate",
+            ItemEnum::Primitive(_) => "primitive",
+            _ => "other",
         }
         .to_string())
     }
@@ -240,6 +247,26 @@ impl QueryEngine {
             "trait" => Ok(QueryContent::Trait(
                 self.extract_trait_result(krate, item, options)?,
             )),
+            "module" => Ok(QueryContent::Module(
+                self.extract_module_result(krate, id, item, options)?,
+            )),
+            "function" | "constant" | "static" | "macro" | "proc_macro" | "use" | "primitive"
+            | "other" => {
+                // For standalone items, create a minimal module result
+                let mut result = ModuleResult::new();
+                let item_path = self.get_qualified_path(krate, id)?;
+                let name = item.name.clone().unwrap_or_default();
+                let mut module_item = ModuleItem::new(name, kind.to_string(), item_path);
+
+                // Add signature for functions
+                if let ItemEnum::Function(func) = &item.inner {
+                    module_item =
+                        module_item.with_signature(TypeFormatter::format_signature(&func.sig));
+                }
+
+                result.add_item(module_item);
+                Ok(QueryContent::Module(result))
+            }
             _ => Err(anyhow::anyhow!("Unsupported item kind: {}", kind)),
         }
     }
@@ -375,6 +402,53 @@ impl QueryEngine {
         } else {
             Err(anyhow::anyhow!("Item is not a trait"))
         }
+    }
+
+    /// Extract module query result (items and submodules)
+    fn extract_module_result(
+        &self,
+        krate: &Crate,
+        module_id: Id,
+        item: &Item,
+        _options: &QueryOptions,
+    ) -> Result<ModuleResult> {
+        let mut result = ModuleResult::new();
+
+        // Get the module data from the item
+        if let ItemEnum::Module(module) = &item.inner {
+            // Iterate over items in the module
+            for item_id in &module.items {
+                if let Some(module_item) = krate.index.get(item_id) {
+                    let item_path = self.get_qualified_path(krate, *item_id)?;
+                    let kind =
+                        Self::item_kind(module_item).unwrap_or_else(|_| "unknown".to_string());
+                    let name = module_item.name.clone().unwrap_or_default();
+
+                    // Skip impl blocks and other items we don't want to list
+                    if kind == "impl" || kind == "unknown" {
+                        continue;
+                    }
+
+                    if kind == "module" {
+                        // This is a submodule
+                        result.add_submodule(name);
+                    } else {
+                        // This is a regular module item
+                        let mut module_item_output = ModuleItem::new(name, kind.clone(), item_path);
+
+                        // Add signature for functions
+                        if let ItemEnum::Function(func) = &module_item.inner {
+                            module_item_output = module_item_output
+                                .with_signature(TypeFormatter::format_signature(&func.sig));
+                        }
+
+                        result.add_item(module_item_output);
+                    }
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     /// Extract a single method output

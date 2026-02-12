@@ -22,12 +22,13 @@ pub struct QueryMatch {
     content: QueryContent,
 }
 
-/// Content of a match - either type or trait result
+/// Content of a match - type, trait, or module result
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum QueryContent {
     Type(TypeResult),
     Trait(TraitResult),
+    Module(ModuleResult),
 }
 
 /// Result of a type query
@@ -47,6 +48,27 @@ pub struct TraitResult {
     associated_types: Vec<AssociatedTypeOutput>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     provided_methods: Vec<String>,
+}
+
+/// Result of a module query
+#[derive(Serialize, Debug)]
+pub struct ModuleResult {
+    /// Module items (types, traits, functions, etc.)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<ModuleItem>,
+    /// Submodules
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub submodules: Vec<String>,
+}
+
+/// Item within a module
+#[derive(Serialize, Debug)]
+pub struct ModuleItem {
+    pub name: String,
+    pub kind: String, // "struct", "enum", "trait", "function", "type", etc.
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>, // For functions
 }
 
 /// Method output for queries
@@ -156,6 +178,7 @@ impl QueryMatch {
             content: match &self.content {
                 QueryContent::Type(t) => QueryContent::Type(t.to_minimal()),
                 QueryContent::Trait(t) => QueryContent::Trait(t.to_minimal()),
+                QueryContent::Module(m) => QueryContent::Module(m.to_minimal()),
             },
         }
     }
@@ -300,6 +323,62 @@ impl AssociatedTypeOutput {
     pub fn with_default(mut self, default: Option<String>) -> Self {
         self.default = default;
         self
+    }
+}
+
+impl ModuleResult {
+    /// Create a new module result
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            submodules: Vec::new(),
+        }
+    }
+
+    /// Add an item to the module
+    pub fn add_item(&mut self, item: ModuleItem) {
+        self.items.push(item);
+    }
+
+    /// Add a submodule
+    pub fn add_submodule(&mut self, name: String) {
+        self.submodules.push(name);
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            items: self.items.iter().map(|i| i.to_minimal()).collect(),
+            submodules: self.submodules.clone(),
+        }
+    }
+}
+
+impl ModuleItem {
+    /// Create a new module item
+    pub fn new(name: String, kind: String, path: String) -> Self {
+        Self {
+            name,
+            kind,
+            path,
+            signature: None,
+        }
+    }
+
+    /// Set the signature (for functions)
+    pub fn with_signature(mut self, signature: String) -> Self {
+        self.signature = Some(signature);
+        self
+    }
+
+    /// Convert to minimal representation
+    pub fn to_minimal(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            kind: self.kind.clone(),
+            path: self.path.clone(),
+            signature: None, // Omit signatures in minimal mode
+        }
     }
 }
 

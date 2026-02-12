@@ -1,6 +1,5 @@
 // Path resolution and ID lookup utilities
 
-use anyhow::Result;
 use rustdoc_types::{Crate, Id, Item};
 use std::collections::HashMap;
 
