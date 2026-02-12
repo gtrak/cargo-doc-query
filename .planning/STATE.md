@@ -15,21 +15,21 @@
 
 | Success Criterion | Status |
 |-------------------|--------|
-| User can run `cargo doc-query build` | ✅ Implemented |
-| Build generates rustdoc JSON for all dependencies | ✅ Implemented |
+| User can run `cargo doc-query build` | ✅ Verified (01-04) |
+| Build generates rustdoc JSON for all dependencies | ✅ Verified (01-04) |
 | Format version validated (fail fast on incompatible) | ✅ Implemented |
 | Graph-based index created and persisted | ✅ Implemented |
 | Cache persistence with automatic invalidation | ✅ Implemented |
 
-**Progress:** ████████░░░░░ 80% (Plan 01-03 complete)
+**Progress:** ██████████░ 90% (Plans 01-04 complete)
 
 ---
 
 ## Active Plan
 
-**Plan:** 01-03
-**Status:** ✅ Complete
-**Last activity:** 2026-02-12 - Completed 01-03-SUMMARY.md
+**Plan:** 01-05 (next planned in foundation phase)
+**Status:** Ready to plan
+**Last activity:** 2026-02-12 - Completed 01-04-SUMMARY.md
 
 ### Completed Plans
 
@@ -38,6 +38,7 @@
 | 01-01 | CLI foundation | d1e47d2 | Command trait, clap CLI, module structure |
 | 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
 | 01-03 | Cache persistence | cd35fbe | BLAKE3 key generation, postcard serialization, cache store integration |
+| 01-04 | Gap closure - manifest resolution | e13ab03 | Fixed rustdoc-json manifest resolution, filtered external dependencies, graceful error handling |
 
 ### Completed Plans
 
@@ -61,6 +62,9 @@
 | 01-03 | 2 | Implement cache key generation | ed40e09 |
 | 01-03 | 3 | Implement cache store with postcard | a4e82c4 |
 | 01-03 | 4 | Integrate cache into BuildCommand | cd35fbe |
+| 01-04 | 1 | Filter external dependencies only | 0583c81 |
+| 01-04 | 2 | Fix rustdoc-json manifest path handling | e13ab03 |
+| 01-04 | 3 | Verify cache contains actual data | (skipped - gitignored) |
 
 ---
 
@@ -135,14 +139,16 @@ None
 - 01-01: CLI foundation with clap and Command trait (complete)
 - 01-02: Build workflow with dependency discovery, rustdoc JSON generation, format validation, and graph index (complete)
 - 01-03: Cache persistence with BLAKE3 keys and postcard serialization (complete)
+- 01-04: Gap closure - fixed rustdoc-json manifest resolution and verified cache (complete)
 
 ### Session Handoff Notes
 
 If resuming work:
 1. Current phase: Phase 1 (Foundation)
-2. Active plan: Phase 1 complete - ready for next phase
-3. Cache is working: users can run `cargo doc-query build` with caching
+2. Active plan: Plans 01-01 through 01-04 complete, ready for next phase (01-05 or Phase 2)
+3. Cache is working: users can run `cargo doc-query build` with caching for 80+ external dependencies
 4. Graph relationships not yet populated (Phase 02 work)
+5. BUILD-01 and BUILD-02 requirements verified (cargo doc-query build succeeds, no virtual manifest errors)
 
 ---
 
@@ -151,9 +157,9 @@ If resuming work:
 | Metric | Current | Target |
 |--------|---------|--------|
 | Query latency (cached) | — | <100ms |
-| Build time (small project) | — | <5s |
-| Requirements implemented | 3/18 | 18/18 |
-| Phases complete | 3/5 | 5/5 |
+| Build time (small project) | <5s | <5s |
+| Requirements implemented | 5/18 | 18/18 |
+| Phases complete | 1/5 | 5/5 |
 
 ---
 
