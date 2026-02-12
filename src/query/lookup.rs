@@ -74,3 +74,38 @@ impl PathResolver {
             .and_then(|krate| krate.index.get(&id))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_matches_exact() {
+        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
+        assert!(PathResolver::path_matches(&item_path, "std::vec::Vec"));
+    }
+
+    #[test]
+    fn test_path_matches_suffix() {
+        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
+        assert!(PathResolver::path_matches(&item_path, "vec::Vec"));
+        assert!(PathResolver::path_matches(&item_path, "Vec"));
+    }
+
+    #[test]
+    fn test_path_matches_no_match() {
+        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
+        assert!(!PathResolver::path_matches(
+            &item_path,
+            "std::string::String"
+        ));
+        assert!(!PathResolver::path_matches(&item_path, "Option"));
+    }
+
+    #[test]
+    fn test_path_matches_partial_suffix() {
+        let item_path = vec!["anyhow".to_string(), "Error".to_string()];
+        assert!(PathResolver::path_matches(&item_path, "anyhow::Error"));
+        assert!(PathResolver::path_matches(&item_path, "Error"));
+    }
+}
