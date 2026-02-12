@@ -19,16 +19,25 @@
 | Build generates rustdoc JSON for all dependencies | ✅ Implemented |
 | Format version validated (fail fast on incompatible) | ✅ Implemented |
 | Graph-based index created and persisted | ✅ Implemented |
+| Cache persistence with automatic invalidation | ✅ Implemented |
 
-**Progress:** ████░░░░░░░ 40% (Plan 01-02 complete)
+**Progress:** ████████░░░░░ 80% (Plan 01-03 complete)
 
 ---
 
 ## Active Plan
 
 **Plan:** 01-03
-**Status:** 🔄 In progress
-**Next milestone:** Complete Phase 1 foundation with cache layer
+**Status:** ✅ Complete
+**Last activity:** 2026-02-12 - Completed 01-03-SUMMARY.md
+
+### Completed Plans
+
+| Plan | Name | Commit | Summary |
+| ---- | ---- | ------ | ------- |
+| 01-01 | CLI foundation | d1e47d2 | Command trait, clap CLI, module structure |
+| 01-02 | Build workflow | 21304e5 | Dependency discovery, rustdoc JSON generation, format validation, graph index |
+| 01-03 | Cache persistence | cd35fbe | BLAKE3 key generation, postcard serialization, cache store integration |
 
 ### Completed Plans
 
@@ -48,6 +57,10 @@
 | 01-02 | 2 | Implement format version validation | 9475523 |
 | 01-02 | 3 | Implement graph-based index | b97e66c |
 | 01-02 | 4 | Implement BuildCommand workflow | 21304e5 |
+| 01-03 | 1 | Create cache module structure | 3e2b99d |
+| 01-03 | 2 | Implement cache key generation | ed40e09 |
+| 01-03 | 3 | Implement cache store with postcard | a4e82c4 |
+| 01-03 | 4 | Integrate cache into BuildCommand | cd35fbe |
 
 ---
 
@@ -93,12 +106,14 @@ Parser & Cache Layer (serde_json, postcard)
 | 2026-02-12 | Fail-fast format validation | Prevents cryptic serde errors, provides clear error messages |
 | 2026-02-12 | Graph key is (name, version) tuple | Handles multiple versions of same crate correctly |
 | 2026-02-12 | Graceful error handling on individual crates | Continues build even if one dependency fails |
+| 2026-02-12 | BLAKE3 cache key from Cargo.lock + rustc version + target | Ensures cache invalidation on dependency changes |
+| 2026-02-12 | Postcard binary serialization for cache storage | Smaller files, faster I/O, sub-100ms reads |
 
 ### Open Questions
 
-- Cache key design: which inputs to hash? (Cargo.lock hash, rustc version, feature flags?)
-- Graph schema details: specific Node and Edge variants needed
+- Graph schema details: specific Node and Edge variants needed (planned for Phase 02)
 - Performance baseline: memory usage on large crates (aws-sdk-ec2)
+- Cache file size optimization for extremely large dependencies (future consideration)
 
 ### Known Blockers
 
@@ -106,9 +121,8 @@ None
 
 ### Technical Debt
 
-- **Dead code warnings:** json_path field in CrateNode and DependencyEdge variants are unused (expected - will be used in phase 01-03 and 02-01)
-- **Missing postcard integration:** Index structure created but not yet persisted (planned for phase 01-03)
-- **No BLAKE3 hashing:** Cache key generation not yet implemented (planned for phase 01-03)
+- **Dead code warnings:** json_path field in CrateNode and DependencyEdge variants are unused (expected - will be used in phase 02-01)
+- **Empty edges in SerializableIndex:** Edges are not populated (planned for Phase 02 graph relationships)
 
 ---
 
@@ -120,14 +134,15 @@ None
 - Phase 1 roadmap created with 5 phases covering 18 v1 requirements
 - 01-01: CLI foundation with clap and Command trait (complete)
 - 01-02: Build workflow with dependency discovery, rustdoc JSON generation, format validation, and graph index (complete)
+- 01-03: Cache persistence with BLAKE3 keys and postcard serialization (complete)
 
 ### Session Handoff Notes
 
 If resuming work:
 1. Current phase: Phase 1 (Foundation)
-2. Active plan: 01-03 (cache layer and serialization)
-3. Build workflow is complete: users can run `cargo doc-query build`
-4. Graph index created in memory, needs persistence (next phase)
+2. Active plan: Phase 1 complete - ready for next phase
+3. Cache is working: users can run `cargo doc-query build` with caching
+4. Graph relationships not yet populated (Phase 02 work)
 
 ---
 
@@ -137,8 +152,8 @@ If resuming work:
 |--------|---------|--------|
 | Query latency (cached) | — | <100ms |
 | Build time (small project) | — | <5s |
-| Requirements implemented | 2/18 | 18/18 |
-| Phases complete | 2/5 | 5/5 |
+| Requirements implemented | 3/18 | 18/18 |
+| Phases complete | 3/5 | 5/5 |
 
 ---
 
