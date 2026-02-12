@@ -2,6 +2,16 @@
 
 use serde::Serialize;
 
+/// Top-level expansion result
+#[derive(Serialize, Debug)]
+pub struct ExpansionResult {
+    /// Type graph with all discovered types
+    pub graph: TypeGraph,
+    /// List of paths that hit cycle detection limits
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cycles_detected: Vec<String>,
+}
+
 /// Top-level expansion result containing type graph and metadata
 #[derive(Serialize, Debug, Default)]
 pub struct TypeGraph {

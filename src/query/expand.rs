@@ -1,0 +1,329 @@
+// Recursive type expansion with cycle detection
+
+use anyhow::Result;
+use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
+use std::collections::HashMap;
+use std::collections::HashSet;
+
+use crate::cache::store::SerializableIndex;
+use crate::query::lookup::PathResolver;
+use crate::types::expand::{ExpansionResult, FieldInfo, TypeGraph, TypeNode};
+
+pub struct TypeExpander {
+    index: SerializableIndex,
+    crates: HashMap<String, Crate>,
+    visited: HashSet<Id>,
+    current_depth: u32,
+    depth_limit: u32,
+}
+
+impl TypeExpander {
+    pub fn new(index: SerializableIndex, depth_limit: u32) -> Self {
+        Self {
+            index,
+            crates: HashMap::new(),
+            visited: HashSet::new(),
+            current_depth: 0,
+            depth_limit,
+        }
+    }
+
+    /// Load a crate's rustdoc JSON into memory
+    fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<()> {
+        use std::fs;
+
+        let key = format!("{}::{}", crate_name, crate_version);
+        if self.crates.contains_key(&key) {
+            return Ok(());
+        }
+
+        let crate_node = self
+            .index
+            .nodes
+            .iter()
+            .find(|n| n.name == crate_name && n.version == crate_version)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
+            })?;
+
+        let json_path = &crate_node.json_path;
+        let json_str = fs::read_to_string(json_path).map_err(|e| {
+            anyhow::anyhow!("Failed to read rustdoc JSON from {}: {}", json_path, e)
+        })?;
+
+        let krate: Crate = serde_json::from_str(&json_str).map_err(|e| {
+            anyhow::anyhow!("Failed to parse rustdoc JSON from {}: {}", json_path, e)
+        })?;
+
+        self.crates.insert(key, krate);
+        Ok(())
+    }
+
+    pub fn expand(&mut self, path: &str, crate_filter: Option<&str>) -> Result<ExpansionResult> {
+        let mut graph = TypeGraph::new(path.to_string(), self.depth_limit);
+
+        // Collect crate names to load first (avoid borrow issues)
+        let crates_to_load: Vec<(String, String)> = self
+            .index
+            .nodes
+            .iter()
+            .filter(|n| crate_filter.map_or(true, |f| n.name == f))
+            .map(|n| (n.name.clone(), n.version.clone()))
+            .collect();
+
+        // Load all crates first
+        for (name, version) in &crates_to_load {
+            self.load_crate(name, version)?;
+        }
+
+        if self.crates.is_empty() {
+            return Err(anyhow::anyhow!("No crates loaded"));
+        }
+
+        // Try to find and expand the type in each loaded crate
+        let crate_keys: Vec<String> = self.crates.keys().cloned().collect();
+        let mut found = false;
+
+        for key in crate_keys {
+            // Get a reference to the crate - we need to be careful about borrowing
+            let items: Vec<(Id, Item)> = {
+                let krate = self.crates.get(&key).unwrap();
+                PathResolver::find_by_path(krate, path)
+                    .into_iter()
+                    .map(|(id, item)| (id.clone(), item.clone()))
+                    .collect()
+            };
+
+            if items.is_empty() {
+                continue;
+            }
+
+            found = true;
+
+            for (id, item) in items {
+                self.visited.clear();
+                self.current_depth = 0;
+
+                match &item.inner {
+                    ItemEnum::Struct(_)
+                    | ItemEnum::Enum(_)
+                    | ItemEnum::Union(_)
+                    | ItemEnum::TypeAlias(_) => {
+                        if let Some(node) = self.expand_item(&id, 0)? {
+                            graph.add_node(node);
+                        }
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "Item is not a type - cannot expand: {}",
+                            path
+                        ));
+                    }
+                }
+            }
+        }
+
+        if !found {
+            return Err(anyhow::anyhow!("No items found matching path: {}", path));
+        }
+
+        Ok(ExpansionResult {
+            graph,
+            cycles_detected: Vec::new(),
+        })
+    }
+
+    fn expand_item(&mut self, item_id: &Id, depth: u32) -> Result<Option<TypeNode>> {
+        if self.visited.contains(item_id) {
+            return Ok(None);
+        }
+
+        self.visited.insert(*item_id);
+
+        if depth >= self.depth_limit {
+            return Ok(None);
+        }
+
+        // Find the item in any loaded crate
+        let mut item: Option<Item> = None;
+        let mut krate_key: Option<String> = None;
+
+        for (key, crate_data) in &self.crates {
+            if let Some(found_item) = crate_data.index.get(item_id) {
+                item = Some(found_item.clone());
+                krate_key = Some(key.clone());
+                break;
+            }
+        }
+
+        let item = item.ok_or_else(|| anyhow::anyhow!("Item not found"))?;
+        let krate_key = krate_key.ok_or_else(|| anyhow::anyhow!("Crate not found"))?;
+        let krate = self.crates.get(&krate_key).unwrap();
+
+        let type_path = self.get_path(krate, *item_id);
+
+        let kind = match &item.inner {
+            ItemEnum::Struct(_) => "struct",
+            ItemEnum::Enum(_) => "enum",
+            ItemEnum::Union(_) => "union",
+            ItemEnum::TypeAlias(_) => "type alias",
+            _ => "type",
+        };
+
+        let mut node = TypeNode::new(type_path.clone(), kind.to_string(), depth);
+
+        // Extract fields/variants based on type kind
+        match &item.inner {
+            ItemEnum::Struct(struct_type) => {
+                use rustdoc_types::StructKind;
+                match &struct_type.kind {
+                    StructKind::Plain { fields, .. } => {
+                        for field_id in fields {
+                            if let Some(field_item) = krate.index.get(field_id) {
+                                if let ItemEnum::StructField(field_type) = &field_item.inner {
+                                    let field_name = field_item.name.clone().unwrap_or_default();
+                                    let type_str = self.format_type(field_type);
+                                    let field_info = FieldInfo::new(field_name, type_str, false);
+                                    node.add_field(field_info);
+                                }
+                            }
+                        }
+                    }
+                    StructKind::Unit => {
+                        // Unit structs have no fields
+                    }
+                    StructKind::Tuple(fields) => {
+                        for (i, field_id_opt) in fields.iter().enumerate() {
+                            if let Some(field_id) = field_id_opt {
+                                if let Some(field_item) = krate.index.get(field_id) {
+                                    if let ItemEnum::StructField(field_type) = &field_item.inner {
+                                        let type_str = self.format_type(field_type);
+                                        let field_info =
+                                            FieldInfo::new(format!("{}", i), type_str, false);
+                                        node.add_field(field_info);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ItemEnum::Enum(enum_type) => {
+                for variant_id in &enum_type.variants {
+                    if let Some(variant_item) = krate.index.get(variant_id) {
+                        if let ItemEnum::Variant(variant_data) = &variant_item.inner {
+                            let variant_name = variant_item.name.clone().unwrap_or_default();
+                            let mut variant_info =
+                                crate::types::expand::VariantInfo::new(variant_name);
+
+                            // Extract variant fields
+                            use rustdoc_types::VariantKind;
+                            match &variant_data.kind {
+                                VariantKind::Plain => {}
+                                VariantKind::Tuple(fields) => {
+                                    for (i, field_id_opt) in fields.iter().enumerate() {
+                                        if let Some(field_id) = field_id_opt {
+                                            if let Some(field_item) = krate.index.get(field_id) {
+                                                if let ItemEnum::StructField(field_type) =
+                                                    &field_item.inner
+                                                {
+                                                    let type_str = self.format_type(field_type);
+                                                    let field_info = FieldInfo::new(
+                                                        format!("{}", i),
+                                                        type_str,
+                                                        false,
+                                                    );
+                                                    variant_info.add_field(field_info);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                VariantKind::Struct { fields, .. } => {
+                                    for field_id in fields {
+                                        if let Some(field_item) = krate.index.get(field_id) {
+                                            if let ItemEnum::StructField(field_type) =
+                                                &field_item.inner
+                                            {
+                                                let field_name =
+                                                    field_item.name.clone().unwrap_or_default();
+                                                let type_str = self.format_type(field_type);
+                                                let field_info =
+                                                    FieldInfo::new(field_name, type_str, false);
+                                                variant_info.add_field(field_info);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            node.add_variant(variant_info);
+                        }
+                    }
+                }
+            }
+            ItemEnum::TypeAlias(type_alias) => {
+                // Type alias - show what it points to
+                let type_str = self.format_type(&type_alias.type_);
+                node.add_generic_param(format!("= {}", type_str));
+            }
+            _ => {}
+        }
+
+        Ok(Some(node))
+    }
+
+    fn format_type(&self, ty: &Type) -> String {
+        match ty {
+            Type::ResolvedPath(path) => path.path.clone(),
+            Type::Primitive(p) => p.clone(),
+            Type::Generic(g) => g.clone(),
+            Type::Slice(inner) => format!("[{}]", self.format_type(inner)),
+            Type::Array { type_, len } => format!("[{}; {}]", self.format_type(type_), len),
+            Type::Tuple(types) => {
+                let parts: Vec<String> = types.iter().map(|t| self.format_type(t)).collect();
+                format!("({})", parts.join(", "))
+            }
+            Type::RawPointer { type_, is_mutable } => {
+                let mut_str = if *is_mutable { "mut " } else { "const " };
+                format!("*{}{}", mut_str, self.format_type(type_))
+            }
+            Type::BorrowedRef { type_, .. } => self.format_type(type_),
+            Type::ImplTrait(bounds) => {
+                let parts: Vec<String> = bounds.iter().map(|b| format!("{:?}", b)).collect();
+                format!("impl {}", parts.join(" + "))
+            }
+            Type::DynTrait(dyn_trait) => {
+                let mut parts = Vec::new();
+                for trait_bound in &dyn_trait.traits {
+                    parts.push(trait_bound.trait_.path.clone());
+                }
+                if let Some(lifetime) = &dyn_trait.lifetime {
+                    parts.push(lifetime.clone());
+                }
+                format!("dyn {}", parts.join(" + "))
+            }
+            Type::Infer => "_".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+
+    fn get_path(&self, krate: &Crate, id: Id) -> String {
+        krate
+            .paths
+            .get(&id)
+            .map(|summary| summary.path.join("::"))
+            .unwrap_or_else(|| format!("{:?}", id))
+    }
+}
+
+pub fn expand_type(path: &str, depth: u32, crate_filter: Option<&str>) -> Result<ExpansionResult> {
+    let index = crate::cache::store::CacheStore::new()?
+        .load_current()?
+        .ok_or_else(|| {
+            anyhow::anyhow!("No cached index found. Run `cargo doc-query build` first.")
+        })?;
+
+    let mut expander = TypeExpander::new(index, depth);
+    expander.expand(path, crate_filter)
+}

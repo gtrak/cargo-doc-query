@@ -8,6 +8,7 @@ mod types;
 
 use clap::{Parser, Subcommand};
 use cli::build::BuildCommand;
+use cli::expand::ExpandCommand;
 use cli::query::QueryCommand;
 use cli::Command;
 
@@ -59,6 +60,21 @@ enum Commands {
         #[arg(long, default_value = "all")]
         kind: String,
     },
+
+    /// Expand a type to show its full type hierarchy
+    #[command(name = "expand")]
+    Expand {
+        /// The type path to expand (e.g., anyhow::Error)
+        path: String,
+
+        /// Maximum recursion depth (default: 3)
+        #[arg(long, default_value = "3")]
+        depth: u32,
+
+        /// Limit to specific crate
+        #[arg(long)]
+        crate_name: Option<String>,
+    },
 }
 
 fn main() {
@@ -96,6 +112,15 @@ fn main() {
             QueryCommand::new(path.clone(), crate_name.clone(), include.clone(), kind)
                 .execute()
                 .expect("Query failed");
+        }
+        Commands::Expand {
+            path,
+            depth,
+            crate_name,
+        } => {
+            ExpandCommand::new(path.clone(), *depth, crate_name.clone())
+                .execute()
+                .expect("Expand failed");
         }
     }
 }
