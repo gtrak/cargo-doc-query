@@ -14,10 +14,10 @@ pub fn get_workspace_dependencies(
 
     let mut deps = Vec::new();
 
-    // Include workspace members only (not external dependencies)
+    // Skip workspace members, only get external dependencies
     // This avoids rustdoc-json errors when documenting registry crates from workspace root
     for package in &metadata.packages {
-        if metadata.workspace_members.contains(&package.id) {
+        if !metadata.workspace_members.contains(&package.id) {
             deps.push((
                 package.name.clone(),
                 package.version.to_string(),
