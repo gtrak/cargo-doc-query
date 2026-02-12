@@ -135,6 +135,15 @@ Plan list:
 **Key Risks Addressed:**
 - Unbounded Recursive Type Expansion (depth limits + cycle detection)
 
+**Plans:** 3 plans in 2 waves
+
+**Plan list:**
+- [ ] 04-01-PLAN.md — Recursive type expansion command with --depth flag and cycle detection
+- [ ] 04-02-PLAN.md — Token budget constraints (--tokens) and minimal mode (--minimal) for expand
+- [ ] 04-03-PLAN.md — Integrate --tokens and --minimal into query command for consistency
+
+**Status:** ⏳ Planned (2026-02-12)
+
 ---
 
 ## Phase 5: Integration & Polish
