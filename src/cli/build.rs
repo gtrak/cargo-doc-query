@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use rustdoc_json::Builder;
 use std::panic;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::cache::key::CacheKeyInputs;
 use crate::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
@@ -87,6 +87,61 @@ impl BuildCommand {
         Ok(paths)
     }
 
+    /// Generate stdlib rustdoc JSON using rustc --document-std
+    fn generate_stdlib_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
+        let stdlib_dir = PathBuf::from("target/doc-query/stdlib");
+
+        // Create stdlib directory
+        std::fs::create_dir_all(&stdlib_dir).context("Failed to create stdlib directory")?;
+
+        println!("Generating stdlib rustdoc JSON...");
+
+        // Use rustc --document-std to generate stdlib JSON
+        let output = std::process::Command::new("rustc")
+            .args([
+                "+nightly",
+                "--document-std",
+                &format!("--output={}", stdlib_dir.display()),
+            ])
+            .output()
+            .context("Failed to generate stdlib JSON")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "rustc --document-std failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        // Collect generated JSON files
+        let mut stdlib_crates = Vec::new();
+
+        // rustc --document-std generates JSON for: std, core, alloc, proc_macro, test
+        let stdlib_list = [
+            ("std", "0.0.0"),
+            ("core", "0.0.0"),
+            ("alloc", "0.0.0"),
+            ("proc_macro", "0.0.0"),
+            ("test", "0.0.0"),
+        ];
+
+        for (name, version) in stdlib_list {
+            let json_path = stdlib_dir.join(format!("{}.json", name));
+            if json_path.exists() {
+                stdlib_crates.push((name.to_string(), version.to_string(), json_path));
+                println!("✓ Generated stdlib JSON: {}", name);
+            }
+        }
+
+        if stdlib_crates.is_empty() {
+            return Err(anyhow::anyhow!("No stdlib JSON files generated"));
+        }
+
+        println!("Generated stdlib JSON for {} crate(s)", stdlib_crates.len());
+
+        Ok(stdlib_crates)
+    }
+
     fn generate_serializable_index(
         &self,
         _deps: &[(String, String, Utf8PathBuf)],
@@ -95,12 +150,20 @@ impl BuildCommand {
         // Convert graph to serializable format
         let mut nodes = Vec::new();
 
-        // Add all nodes
+        // Add all nodes (use absolute paths)
         for (pkg_name, pkg_version, json_path) in json_paths {
+            let absolute_path = if json_path.is_absolute() {
+                json_path.clone()
+            } else {
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(json_path)
+            };
+
             nodes.push(SerializableCrateNode {
                 name: pkg_name.clone(),
                 version: pkg_version.clone(),
-                json_path: json_path.display().to_string(),
+                json_path: absolute_path.display().to_string(),
             });
         }
 
@@ -138,14 +201,25 @@ impl Command for BuildCommand {
 
         println!("No valid cache found, building index...");
 
-        // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
+        // 4. Generate rustdoc JSON for stdlib
+        let stdlib_json_paths = self
+            .generate_stdlib_json()
+            .context("Failed to generate stdlib JSON")?;
+
+        // 5. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
         let json_paths = self.generate_rustdoc_json(&deps)?;
 
         println!("Generated rustdoc JSON");
 
-        // 5. Parse and validate the JSON file (BUILD-05)
+        // 6. Combine stdlib and external dependencies for index
+        let all_json_paths: Vec<_> = stdlib_json_paths
+            .into_iter()
+            .chain(json_paths.into_iter())
+            .collect();
+
+        // 7. Parse and validate all JSON files
         let mut graph = CrateGraph::new();
-        let json_paths_refs: Vec<_> = json_paths.iter().collect();
+        let json_paths_refs: Vec<_> = all_json_paths.iter().collect();
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
             println!("Processing {} v{}...", pkg_name, pkg_version);
 
@@ -167,8 +241,8 @@ impl Command for BuildCommand {
 
         println!("Successfully indexed {} crates", graph.crate_count());
 
-        // 6. Save to cache (CACHE-03)
-        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
+        // 8. Save to cache (CACHE-03)
+        let mut serializable = self.generate_serializable_index(&deps, &all_json_paths);
         serializable.cache_key = cache_key.clone();
         cache_store.save(&cache_key, &serializable)?;
         println!("Index cached successfully");

@@ -100,4 +100,16 @@ impl CacheStore {
             None => Ok(None),
         }
     }
+
+    /// Clear stdlib JSON (for testing or forced rebuild)
+    pub fn clear_stdlib(&self) -> Result<()> {
+        let stdlib_dir = self.cache_dir.join("stdlib");
+
+        if stdlib_dir.exists() {
+            std::fs::remove_dir_all(&stdlib_dir).context("Failed to remove stdlib directory")?;
+            println!("Cleared stdlib JSON");
+        }
+
+        Ok(())
+    }
 }
