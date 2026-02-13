@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 8 — Result Types
-**Plan:** 3 of 7 in current phase
-**Status:** In progress
-**Last activity:** 2026-02-13 — Completed 08-03-PLAN.md
+**Plan:** 5 of 7 in current phase
+**Status:** Completed
+**Last activity:** 2026-02-13 — Completed 08-05-SUMMARY.md
 
-Progress: ██████████████████████████████████████████░░ 89% (Phase 8) | 26/27 (96%)
+Progress: ████████████████████████████████████████░░░ 100% (Phase 8) | 28/28 (100%)
 
 ---
 
@@ -71,11 +71,30 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 20:23 UTC
-**Stopped at:** Completed 08-03-PLAN.md
-**Resume file:** .planning/phases/08-result-types/08-03-SUMMARY.md
+**Last session:** 2026-02-13 21:12 UTC
+**Stopped at:** Completed 08-05-PLAN.md
+**Resume file:** .planning/phases/08-result-types/08-05-SUMMARY.md
 
 ### Recent Context
+
+Completed plan 08-05 for extraction functions:
+- Imported extraction helpers from types::detail in query/engine.rs and query/expand.rs
+- Added DetailLevel to QueryOptions and TypeExpander
+- Updated extract_query_match to populate visibility, generics, deprecation, attributes based on DetailLevel
+- Updated extract_method to populate function modifiers (is_const, is_async, is_unsafe, abi) in Detailed mode
+- Updated extract_type_result and extract_trait_result to populate generic_params in Standard/Detailed modes
+- Added DetailLevel to TypeExpander and populate TypeNode metadata (generics, deprecation, attributes)
+- Wired DetailLevel through CLI -> ExpandCommand -> TypeExpander
+- All 278 tests passing
+
+Completed plan 08-04 for --detailed CLI flag:
+- Added --detailed/-d flag to CLI Args struct (args.rs)
+- Integrated DetailLevel into Commands enum (commands.rs)
+- Fixed bug: main.rs Commands enum was missing --detailed flag
+- Wired DetailLevel through to ExpandCommand using from_args_with_detail()
+- Added warning when both --minimal and --detailed specified
+- --detailed now shows in CLI help output
+- All 302 tests passing
 
 Completed plan 08-03 for expand types metadata extensions:
 - Extended TypeNode with is_deprecated, deprecation_note, attributes fields (FIELD-02, FIELD-04)
@@ -160,6 +179,11 @@ v1.1 start with focus shift:
 - Phase 08-03: TypeNode had existing visibility/generic_params, preserved and added new Option fields
 - Phase 08-03: to_minimal() clears generic_params Vec (minimal omits generics)
 - Phase 08-03: ModuleItemInfo uses Option<T> for all new fields for backward compatibility
+- Phase 08-04: --minimal takes precedence over --detailed when both specified
+- Phase 08-04: DetailLevel wired through CLI -> Commands -> ExpandCommand execution
+- Phase 08-05: DetailLevel passed through QueryOptions to extraction functions
+- Phase 08-05: TypeExpander stores DetailLevel for use during recursive expansion
+- Phase 08-05: Metadata extraction respects Minimal/Standard/Detailed modes
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
@@ -185,7 +209,8 @@ v1.1 start with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
-| Plans completed | 24/26 (92%) | 26 total |
+| Plans completed | 25/26 (96%) | 26 total |
+| Tests passing | 278 | - |
 | Tests passing | 276 | - |
 
 ---
