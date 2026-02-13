@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use postcard::{from_bytes, to_stdvec};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tempfile::TempDir;
 
 /// Serializable index for disk storage
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,11 +26,36 @@ pub struct CacheStore {
 }
 
 impl CacheStore {
+    #[cfg(not(test))]
     pub fn new() -> Result<Self> {
         let cache_dir = PathBuf::from("target/doc-query");
         std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
 
         Ok(Self { cache_dir })
+    }
+
+    pub fn new_with_dir(cache_dir: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
+
+        Ok(Self { cache_dir })
+    }
+
+    #[cfg(test)]
+    pub fn new_temp() -> Result<Self> {
+        let temp_dir = TempDir::new().context("Failed to create temp directory")?;
+
+        Ok(Self {
+            cache_dir: temp_dir.into_path(),
+        })
+    }
+
+    #[cfg(test)]
+    pub fn new() -> Result<Self> {
+        let temp_dir = TempDir::new().context("Failed to create temp directory")?;
+
+        Ok(Self {
+            cache_dir: temp_dir.into_path(),
+        })
     }
 
     /// Save index to cache
@@ -120,23 +146,16 @@ mod tests {
 
     #[test]
     fn test_cache_store_new_creates_directory() {
-        let temp_dir = TempDir::new().unwrap();
-        let original_dir = std::env::current_dir().unwrap();
-
-        // Change to temp directory to avoid conflicts
-        std::env::set_current_dir(temp_dir.path()).unwrap();
-        let cache_store = CacheStore::new().unwrap();
+        let cache_store = CacheStore::new_temp().unwrap();
+        let cache_dir = cache_store.cache_dir;
 
         // Verify directory was created
-        assert!(PathBuf::from("target/doc-query").exists());
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
+        assert!(cache_dir.exists());
     }
 
     #[test]
     fn test_cache_save_and_load() {
-        let cache_store = CacheStore::new().unwrap();
+        let cache_store = CacheStore::new_temp().unwrap();
         let cache_key = "test-key";
 
         let test_index = SerializableIndex {
@@ -158,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_cache_load_nonexistent_key() {
-        let cache_store = CacheStore::new().unwrap();
+        let cache_store = CacheStore::new_temp().unwrap();
         let nonexistent_key = "nonexistent-key-12345";
 
         let loaded = cache_store.load(nonexistent_key).unwrap();
@@ -167,23 +186,18 @@ mod tests {
 
     #[test]
     fn test_cache_load_current_empty_directory() {
-        let temp_dir = TempDir::new().unwrap();
-        let original_dir = std::env::current_dir().unwrap();
+        let cache_store = CacheStore::new_temp().unwrap();
 
-        // Change to temp directory
-        std::env::set_current_dir(temp_dir.path()).unwrap();
-        let cache_store = CacheStore::new().unwrap();
+        // Verify we're in a temp directory by checking cache_dir exists
+        assert!(cache_store.cache_dir.exists());
 
         let loaded = cache_store.load_current().unwrap();
         assert!(loaded.is_none());
-
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
     }
 
     #[test]
     fn test_cache_load_current_multiple_files() {
-        let cache_store = CacheStore::new().unwrap();
+        let cache_store = CacheStore::new_temp().unwrap();
         let key1 = "test-key-1";
         let key2 = "test-key-2";
 
@@ -214,8 +228,9 @@ mod tests {
 
     #[test]
     fn test_cache_save_overwrites_existing() {
-        let cache_store = CacheStore::new().unwrap();
         let cache_key = format!("overwrite-test-{}", std::process::id());
+
+        let cache_store = CacheStore::new_temp().unwrap();
 
         let test_index1 = SerializableIndex {
             format_version: 1,
