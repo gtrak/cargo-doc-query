@@ -27,6 +27,10 @@ pub struct ExpandCommand {
     /// Output minimal representation (signatures only, no field details)
     #[arg(long)]
     minimal: bool,
+
+    /// Output as JSON instead of human-readable text
+    #[arg(long)]
+    pub json: bool,
 }
 
 impl ExpandCommand {
@@ -37,6 +41,7 @@ impl ExpandCommand {
             crate_name,
             tokens: None,
             minimal: false,
+            json: false,
         }
     }
 
@@ -54,6 +59,7 @@ impl ExpandCommand {
             crate_name,
             tokens,
             minimal,
+            json: false,
         }
     }
 }
@@ -150,11 +156,16 @@ impl Command for ExpandCommand {
             expansion.token_count
         );
 
-        // Output JSON
-        let json_output = serde_json::to_string_pretty(&expansion)
-            .context("Failed to serialize expansion as JSON")?;
-
-        println!("{}", json_output);
+        // Output based on format preference
+        if self.json {
+            // Output JSON
+            let json_output = serde_json::to_string_pretty(&expansion)
+                .context("Failed to serialize expansion as JSON")?;
+            println!("{}", json_output);
+        } else {
+            // Output human-readable text
+            crate::format::text::format_expand_result(&expansion, &self.path);
+        }
 
         Ok(())
     }

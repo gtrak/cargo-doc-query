@@ -6,20 +6,20 @@ use serde::Serialize;
 /// Top-level query response
 #[derive(Serialize, Debug)]
 pub struct QueryResponse {
-    query: String,
-    matches: Vec<QueryMatch>,
+    pub query: String,
+    pub matches: Vec<QueryMatch>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    errors: Vec<String>,
+    pub errors: Vec<String>,
 }
 
 /// Individual match from a query
 #[derive(Serialize, Debug)]
 pub struct QueryMatch {
-    crate_name: String,
-    version: String,
-    fully_qualified_path: String,
-    kind: String, // "type", "trait", "module", etc.
-    content: QueryContent,
+    pub crate_name: String,
+    pub version: String,
+    pub fully_qualified_path: String,
+    pub kind: String, // "type", "trait", "module", etc.
+    pub content: QueryContent,
 }
 
 /// Content of a match - type, trait, or module result
@@ -34,20 +34,20 @@ pub enum QueryContent {
 /// Result of a type query
 #[derive(Serialize, Debug)]
 pub struct TypeResult {
-    kind: String, // "struct", "enum", "type alias", etc.
-    methods: Vec<MethodOutput>,
-    trait_implementations: Vec<TraitImplOutput>,
+    pub kind: String, // "struct", "enum", "type alias", etc.
+    pub methods: Vec<MethodOutput>,
+    pub trait_implementations: Vec<TraitImplOutput>,
 }
 
 /// Result of a trait query
 #[derive(Serialize, Debug)]
 pub struct TraitResult {
-    name: String,
-    path: String,
-    methods: Vec<MethodOutput>,
-    associated_types: Vec<AssociatedTypeOutput>,
+    pub name: String,
+    pub path: String,
+    pub methods: Vec<MethodOutput>,
+    pub associated_types: Vec<AssociatedTypeOutput>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    provided_methods: Vec<String>,
+    pub provided_methods: Vec<String>,
 }
 
 /// Result of a module query
@@ -74,15 +74,15 @@ pub struct ModuleItem {
 /// Method output for queries
 #[derive(Serialize, Debug)]
 pub struct MethodOutput {
-    name: String,
-    signature: String,
-    return_type: String,
-    visibility: String,
-    is_public: bool,
+    pub name: String,
+    pub signature: String,
+    pub return_type: String,
+    pub visibility: String,
+    pub is_public: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    docs: Option<String>,
+    pub docs: Option<String>,
     #[serde(skip_serializing_if = "is_false")]
-    is_trait_method: bool,
+    pub is_trait_method: bool,
 }
 
 /// Helper function for skipping false values
@@ -93,23 +93,23 @@ pub(crate) fn is_false(b: &bool) -> bool {
 /// Associated type output for trait queries
 #[derive(Serialize, Debug, Clone)]
 pub struct AssociatedTypeOutput {
-    name: String,
+    pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    bounds: Option<String>,
+    pub bounds: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    default: Option<String>,
+    pub default: Option<String>,
 }
 
 /// Trait implementation output
 #[derive(Serialize, Debug)]
 pub struct TraitImplOutput {
-    trait_name: String,
-    trait_path: String,
-    methods: Vec<MethodOutput>,
+    pub trait_name: String,
+    pub trait_path: String,
+    pub methods: Vec<MethodOutput>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    provided_methods: Vec<String>,
+    pub provided_methods: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    generic_args: Option<String>,
+    pub generic_args: Option<String>,
 }
 
 impl QueryResponse {

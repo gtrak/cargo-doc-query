@@ -42,6 +42,10 @@ pub struct QueryCommand {
     /// Maximum tokens in output (approximate)
     #[arg(long)]
     tokens: Option<usize>,
+
+    /// Output as JSON instead of human-readable text
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,6 +92,7 @@ impl QueryCommand {
         kind: QueryKindArg,
         minimal: bool,
         tokens: Option<usize>,
+        json: bool,
     ) -> Self {
         Self {
             path,
@@ -96,6 +101,7 @@ impl QueryCommand {
             kind,
             minimal,
             tokens,
+            json,
         }
     }
 
@@ -212,11 +218,16 @@ impl Command for QueryCommand {
             eprintln!("Query completed in {}ms", duration.as_millis());
         }
 
-        // Output JSON
-        let json_output = serde_json::to_string_pretty(&response)
-            .context("Failed to serialize response as JSON")?;
-
-        println!("{}", json_output);
+        // Output based on format preference
+        if self.json {
+            // Output JSON
+            let json_output = serde_json::to_string_pretty(&response)
+                .context("Failed to serialize response as JSON")?;
+            println!("{}", json_output);
+        } else {
+            // Output human-readable text
+            crate::format::text::format_query_response(&response, &self.path);
+        }
 
         Ok(())
     }

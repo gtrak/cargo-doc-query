@@ -2,6 +2,7 @@ mod cache;
 mod cargo;
 mod cli;
 mod error;
+mod format;
 mod index;
 mod parser;
 mod query;
@@ -114,6 +115,10 @@ enum Commands {
         /// Maximum tokens in output (approximate)
         #[arg(long, value_name = "N")]
         tokens: Option<usize>,
+
+        /// Output as JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
     },
 
     /// Expand a type to show its full type hierarchy
@@ -145,6 +150,10 @@ enum Commands {
         /// Output minimal representation (signatures only, no field details)
         #[arg(long)]
         minimal: bool,
+
+        /// Output as JSON instead of human-readable text
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -187,6 +196,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
             kind,
             minimal,
             tokens,
+            json,
         } => {
             let kind = match kind.to_lowercase().as_str() {
                 "methods" => cli::query::QueryKindArg::Methods,
@@ -202,6 +212,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 kind,
                 *minimal,
                 *tokens,
+                *json,
             )
             .execute()
             .map_err(|e| {
@@ -221,9 +232,17 @@ fn run(cli: Cli) -> Result<(), AppError> {
             crate_name,
             tokens,
             minimal,
-        } => ExpandCommand::from_args(path.clone(), *depth, crate_name.clone(), *tokens, *minimal)
-            .execute()
-            .map_err(|e| {
+            json,
+        } => {
+            let mut cmd = ExpandCommand::from_args(
+                path.clone(),
+                *depth,
+                crate_name.clone(),
+                *tokens,
+                *minimal,
+            );
+            cmd.json = *json;
+            cmd.execute().map_err(|e| {
                 let msg = e.to_string();
                 if msg.contains("No cached index found") {
                     AppError::NoCache
@@ -232,6 +251,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 } else {
                     AppError::Other(e)
                 }
-            }),
+            })
+        }
     }
 }
