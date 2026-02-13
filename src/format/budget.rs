@@ -50,7 +50,11 @@ impl BudgetTracker {
     /// Track an item's token usage
     ///
     /// Returns the tokens used and the action to take (Include or Truncate)
-    pub fn track_item(&mut self, item_tokens: usize, doc_tokens: usize) -> (usize, TruncationAction) {
+    pub fn track_item(
+        &mut self,
+        item_tokens: usize,
+        doc_tokens: usize,
+    ) -> (usize, TruncationAction) {
         let total_item_tokens = item_tokens + doc_tokens;
 
         // Check if this would exceed budget
@@ -74,7 +78,8 @@ impl BudgetTracker {
     ///
     /// Returns None if no budget is set
     pub fn remaining(&self) -> Option<usize> {
-        self.total_budget.map(|b| b.saturating_sub(self.current_tokens))
+        self.total_budget
+            .map(|b| b.saturating_sub(self.current_tokens))
     }
 
     /// Check if warning should be displayed (threshold reached)
@@ -173,13 +178,11 @@ mod tests {
             visibility: Some("pub".to_string()),
             generics: Some("<T>".to_string()),
             docs: Some("Test documentation".to_string()),
-            fields: vec![
-                FieldInfo {
-                    name: "field1".to_string(),
-                    type_path: "i32".to_string(),
-                    is_optional: false,
-                },
-            ],
+            fields: vec![FieldInfo {
+                name: "field1".to_string(),
+                type_path: "i32".to_string(),
+                is_optional: false,
+            }],
             variants: vec![],
             items: vec![],
             is_deprecated: false,
@@ -192,9 +195,9 @@ mod tests {
     #[test]
     fn test_budget_tracker_no_limit() {
         let mut tracker = BudgetTracker::new(None);
-        
+
         let (tokens, action) = tracker.track_item(100, 50);
-        
+
         assert_eq!(tokens, 150);
         assert_eq!(action, TruncationAction::Include);
         assert!(!tracker.is_warning_needed());
@@ -203,12 +206,12 @@ mod tests {
     #[test]
     fn test_budget_tracker_exceeds() {
         let mut tracker = BudgetTracker::new(Some(100));
-        
+
         // First item fits
         let (tokens, action) = tracker.track_item(50, 30);
         assert_eq!(tokens, 80);
         assert_eq!(action, TruncationAction::Include);
-        
+
         // Second item exceeds
         let (tokens, action) = tracker.track_item(30, 20);
         assert_eq!(tokens, 0);
@@ -218,12 +221,12 @@ mod tests {
     #[test]
     fn test_budget_tracker_remaining() {
         let mut tracker = BudgetTracker::new(Some(100));
-        
+
         assert_eq!(tracker.remaining(), Some(100));
-        
+
         tracker.track_item(30, 20);
         assert_eq!(tracker.remaining(), Some(50));
-        
+
         // At budget
         tracker.track_item(50, 0);
         assert_eq!(tracker.remaining(), Some(0));
@@ -232,11 +235,11 @@ mod tests {
     #[test]
     fn test_budget_tracker_warning_threshold() {
         let mut tracker = BudgetTracker::with_threshold(Some(100), 0.8);
-        
+
         // Below threshold (79 tokens = 79%)
         let _ = tracker.track_item(79, 0);
         assert!(!tracker.is_warning_needed());
-        
+
         // At threshold (80 tokens = 80%)
         let _ = tracker.track_item(1, 0);
         assert!(tracker.is_warning_needed());
@@ -245,9 +248,9 @@ mod tests {
     #[test]
     fn test_estimate_item_tokens() {
         let item = create_test_formatted_item();
-        
+
         let tokens = estimate_item_tokens(&item);
-        
+
         // Base: 20
         // + field: 5
         // + docs: 18 / 4 = 4
@@ -261,13 +264,13 @@ mod tests {
     #[test]
     fn test_track_item_includes_docs() {
         let mut tracker = BudgetTracker::new(Some(50));
-        
-        // Item tokens: 20, Doc tokens: 30 (tokens, action
-        let) = tracker.track_item(20, 30);
-        
+
+        // Item tokens: 20, Doc tokens: 30 = 50 total
+        let (tokens, action) = tracker.track_item(20, 30);
+
         assert_eq!(tokens, 50); // Total = item + doc
         assert_eq!(action, TruncationAction::Include);
-        
+
         // Remaining should be 0
         assert_eq!(tracker.remaining(), Some(0));
     }
@@ -275,7 +278,7 @@ mod tests {
     #[test]
     fn test_would_exceed() {
         let tracker = BudgetTracker::new(Some(100));
-        
+
         assert!(!tracker.would_exceed(50));
         assert!(!tracker.would_exceed(100));
         assert!(tracker.would_exceed(101));
@@ -284,7 +287,7 @@ mod tests {
     #[test]
     fn test_no_budget_never_exceeds() {
         let tracker = BudgetTracker::new(None);
-        
+
         assert!(!tracker.would_exceed(1_000_000));
     }
 }

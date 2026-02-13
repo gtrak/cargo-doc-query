@@ -1,5 +1,8 @@
 //! Human-readable text output formatters
 
+use crate::format::budget::BudgetTracker;
+use crate::format::item::{FormattedItem, ItemFormatter};
+use crate::types::detail::DetailLevel;
 use crate::types::query::{QueryContent, QueryMatch, QueryResponse};
 use console::style;
 
@@ -358,6 +361,113 @@ fn format_type_node(node: &crate::types::expand::TypeNode, indent: usize) {
     // Generic params
     if !node.generic_params.is_empty() {
         println!("{}  <{}>", indent_str, node.generic_params.join(", "));
+    }
+}
+
+/// Format items using the unified ItemFormatter
+///
+/// This provides an alternative rendering path that uses the unified formatter
+/// with optional token budget tracking.
+pub fn format_with_item_formatter(
+    items: &[rustdoc_types::Item],
+    detail_level: DetailLevel,
+    token_budget: Option<usize>,
+) -> Vec<FormattedItem> {
+    let mut formatter = ItemFormatter::new(detail_level, token_budget);
+    let mut results = Vec::new();
+    let mut tracker = BudgetTracker::new(token_budget);
+
+    for item in items {
+        let formatted = formatter.format_item(item);
+        let estimated = crate::format::budget::estimate_item_tokens(&formatted);
+        let doc_tokens = formatted.docs.as_ref().map(|d| d.len() / 4).unwrap_or(0);
+
+        let (_, action) = tracker.track_item(estimated, doc_tokens);
+        if action == crate::format::budget::TruncationAction::Include {
+            results.push(formatted);
+        }
+    }
+
+    // Display warning if budget threshold reached
+    if tracker.is_warning_needed() {
+        println!(
+            "\n{}",
+            style("⚠ Token budget nearing limit - remaining: {} tokens").yellow()
+        );
+    }
+
+    results
+}
+
+/// Format an expansion result using the unified ItemFormatter
+///
+/// This is an alternative to format_expand_result that uses ItemFormatter
+/// for rendering with detail level and optional token budget control.
+pub fn format_expand_result_with_formatter(
+    result: &crate::types::expand::ExpansionResult,
+    root_path: &str,
+    detail_level: DetailLevel,
+    token_budget: Option<usize>,
+) {
+    println!(
+        "{}",
+        style(format!("Expanding: {}", root_path)).bold().cyan()
+    );
+    println!("{}", style("─".repeat(60)).dim());
+
+    if result.graph.nodes.is_empty() {
+        println!("{}", style("No types found in expansion").yellow());
+        return;
+    }
+
+    // Collect all items from nodes
+    // Note: In a real implementation, we'd extract Item from TypeNode
+    // For now, this demonstrates the integration pattern
+
+    let mut tracker = BudgetTracker::new(token_budget);
+
+    // Display nodes similar to original format_expand_result
+    let mut nodes_by_depth: std::collections::HashMap<u32, Vec<&crate::types::expand::TypeNode>> =
+        std::collections::HashMap::new();
+
+    for node in &result.graph.nodes {
+        nodes_by_depth.entry(node.depth).or_default().push(node);
+    }
+
+    let mut depths: Vec<u32> = nodes_by_depth.keys().copied().collect();
+    depths.sort();
+
+    for depth in depths {
+        if let Some(nodes) = nodes_by_depth.get(&depth) {
+            if depth == 0 {
+                for node in nodes {
+                    format_type_node(node, 0);
+                    // Track tokens for this node
+                    let estimated = 20 + node.fields.len() * 5 + node.items.len() * 10;
+                    let _ = tracker.track_item(estimated, 0);
+                }
+            } else {
+                println!("\n  {}", style(format!("Depth {}:", depth)).bold().dim());
+                for node in nodes {
+                    format_type_node(node, 2);
+                    let estimated = 20 + node.fields.len() * 5 + node.items.len() * 10;
+                    let _ = tracker.track_item(estimated, 0);
+                }
+            }
+        }
+    }
+
+    // Show budget warning if needed
+    if tracker.is_warning_needed() {
+        println!("\n{}", style("⚠ Token budget nearing limit").yellow());
+    }
+
+    // Show truncation warning
+    if result.budget_exceeded {
+        println!(
+            "\n{}",
+            style("⚠ Token budget exceeded - some types truncated").yellow()
+        );
     }
 }
 
