@@ -1,17 +1,18 @@
 # Project State: cargo-doc-query
 
-**Milestone:** v1.0 MVP ✅ SHIPPED
-**Current Phase:** Complete (5/5 phases)
-**Status:** Ready for v1.1 planning
+**Milestone:** v1.1 Output Refinement — Defining requirements
+**Current Phase:** Not started (defining requirements)
+**Status:** Research in progress
 **Last Updated:** 2026-02-13
 
 ---
 
 ## Current Position
 
-**Completed:** v1.0 MVP — All 5 phases shipped ✅
-**Working on:** Planning v1.1 enhancements
-**Next milestone:** v1.1 — Shared cache, stdlib queries, GC command
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
+**Last activity:** 2026-02-13 — Milestone v1.1 started (output refinement focus)
 
 ---
 
@@ -33,6 +34,10 @@
 - ~7,172 lines of Rust code
 - 2 days from start to ship
 
+### v1.1 Output Refinement (In Planning)
+
+**Focus:** Unified rendering, robust filtering, documentation support
+
 ---
 
 ## Project Reference
@@ -43,7 +48,11 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 
 ### Current Focus
 
-Planning v1.1 enhancements: shared cache directory, stdlib support, garbage collection.
+v1.1: Output refinement and UX improvements
+- Unified kind rendering at all tree depths
+- Robust `--include`/`--exclude` filtering
+- Doc comment extraction and display
+- Discovery of additional display fields
 
 ---
 
@@ -51,18 +60,18 @@ Planning v1.1 enhancements: shared cache directory, stdlib support, garbage coll
 
 ### Recent Context
 
-v1.0 milestone completed with all requirements shipped:
-- Fast queries (verified 7ms average)
-- Automatic caching with BLAKE3
-- Comprehensive CLI with typed errors
-- Module expansion and type suggestions
+Milestone v1.1 started with focus shift:
+- Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
+- Prioritizing rendering consistency and output refinement
+- Researching rustdoc JSON schema for missing fields
 
-### Session Handoff Notes
+### Accumulated Context
 
-If resuming work:
-1. Current milestone: v1.0 Complete
-2. Next milestone: v1.1 planning
-3. Run `/gsd-new-milestone` to start v1.1
+**Decisions:**
+- v1.1 focus: Output quality over infrastructure
+- v2.0 will address shared cache, stdlib, and GC
+
+**Blockers:** None
 
 ---
 
@@ -72,8 +81,8 @@ If resuming work:
 |--------|---------|--------|
 | Query latency (cached) | 7ms (verified) | <100ms |
 | Build time (small project) | <5s | <5s |
-| Requirements implemented | 18/18 v1 | v1.1 TBD |
-| Milestones complete | 1/1 | TBD |
+| Requirements implemented | 18/18 v1.0 | v1.1 TBD |
+| Milestones complete | 1/1 | 1 in progress |
 
 ---
 

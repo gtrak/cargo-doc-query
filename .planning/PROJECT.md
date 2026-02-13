@@ -1,6 +1,16 @@
 # cargo-doc-query
 
-## Current State
+## Current Milestone: v1.1 Output Refinement
+
+**Goal:** Unify item rendering across all depths and provide robust filtering with documentation support
+
+**Target features:**
+- Consistent kind rendering (modules/functions/types/structs/enums) at any tree depth
+- Robust `--include`/`--exclude` filtering flags
+- Doc comment extraction and display
+- Discovery and implementation of additional rustdoc JSON fields
+
+## Previous Milestone
 
 **Shipped:** v1.0 MVP (2026-02-13)
 
@@ -30,11 +40,18 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 - ✓ Token-budget constrained output modes — v1.0
 - ✓ Minimal and verbose output formats — v1.0
 
-### Active (v1.1)
+### Active (v1.1) — Output Refinement
 
-- [ ] Stdlib queries (Vec, String, Iterator)
-- [ ] Shared cache directory across projects
-- [ ] Garbage collection command
+- [ ] Unified kind rendering (modules/functions/types/structs/enums) at any depth
+- [ ] Robust `--include`/`--exclude` filtering flags
+- [ ] Doc comment extraction and display
+- [ ] Discovery and implementation of additional rustdoc JSON fields
+
+### Deferred to v2.0
+
+- Stdlib queries (Vec, String, Iterator) — deferred for infrastructure focus
+- Shared cache directory across projects — deferred for infrastructure focus  
+- Garbage collection command — deferred for infrastructure focus
 
 ### Out of Scope
 
@@ -45,11 +62,18 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 - Real-time collaboration features
 - GUI interface
 
-## Next Milestone Goals (v1.1)
+## Next Milestone Goals (v2.0)
 
 1. **Shared Cache** — Deduplicate dependency JSON across projects in `~/.cargo/doc-query/`
 2. **Stdlib Support** — Query standard library types (requires rust build system integration)
 3. **Garbage Collection** — Clean up stale cache files with `cargo doc-query gc`
+
+## v1.1 Goals (In Progress)
+
+1. **Unified Rendering** — Consistent display of item kinds regardless of tree depth
+2. **Robust Filtering** — Comprehensive `--include`/`--exclude` flag support
+3. **Documentation** — Extract and display doc comments with token-aware truncation
+4. **Field Discovery** — Audit rustdoc JSON schema for missing display fields
 
 ## Context
 
@@ -102,4 +126,4 @@ LSP (rust-analyzer) limitations:
 | Unified query/expand command | Simplify CLI, single code path | ✓ Good — removed duplication |
 
 ---
-*Last updated: 2026-02-13 after v1.0 milestone completion*
+*Last updated: 2026-02-13 — Milestone v1.1 started (output refinement focus)*
