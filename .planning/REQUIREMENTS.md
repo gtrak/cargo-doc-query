@@ -89,10 +89,6 @@ Explicitly excluded from v1.1.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REND-01 | Phase 6 | Pending |
-| REND-02 | Phase 6 | Pending |
-| REND-03 | Phase 6 | Pending |
-| REND-04 | Phase 6 | Pending |
 | FILT-01 | Phase 6 | Pending |
 | FILT-02 | Phase 6 | Pending |
 | FILT-03 | Phase 6 | Pending |
@@ -100,25 +96,36 @@ Explicitly excluded from v1.1.
 | FILT-05 | Phase 6 | Pending |
 | FILT-06 | Phase 6 | Pending |
 | FILT-07 | Phase 6 | Pending |
-| DOCS-01 | Phase 6 | Pending |
-| DOCS-02 | Phase 6 | Pending |
-| DOCS-03 | Phase 6 | Pending |
-| DOCS-04 | Phase 6 | Pending |
-| DOCS-05 | Phase 6 | Pending |
-| DOCS-06 | Phase 6 | Pending |
-| DOCS-07 | Phase 6 | Pending |
-| FIELD-01 | Phase 6 | Pending |
-| FIELD-02 | Phase 6 | Pending |
-| FIELD-03 | Phase 6 | Pending |
-| FIELD-04 | Phase 6 | Pending |
-| FIELD-05 | Phase 6 | Pending |
-| FIELD-06 | Phase 6 | Pending |
-| FIELD-07 | Phase 6 | Pending |
+| FIELD-01 | Phase 8 | Pending |
+| FIELD-02 | Phase 8 | Pending |
+| FIELD-03 | Phase 8 | Pending |
+| FIELD-04 | Phase 8 | Pending |
+| FIELD-05 | Phase 8 | Pending |
+| FIELD-06 | Phase 8 | Pending |
+| FIELD-07 | Phase 8 | Pending |
+| REND-01 | Phase 9 | Pending |
+| REND-02 | Phase 9 | Pending |
+| REND-03 | Phase 9 | Pending |
+| REND-04 | Phase 9 | Pending |
+| DOCS-01 | Phase 9 | Pending |
+| DOCS-02 | Phase 9 | Pending |
+| DOCS-03 | Phase 9 | Pending |
+| DOCS-04 | Phase 9 | Pending |
+| DOCS-05 | Phase 9 | Pending |
+| DOCS-06 | Phase 9 | Pending |
+| DOCS-07 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 25 total
 - Mapped to phases: 25
 - Unmapped: 0 ✓
+
+**Phase Distribution:**
+- Phase 6 (Foundation — FilterEngine): 7 requirements (FILT-01..07)
+- Phase 7 (CLI Integration): 0 requirements (implements Phase 6 deliverables)
+- Phase 8 (Result Type Extensions): 7 requirements (FIELD-01..07)
+- Phase 9 (Unified Rendering + Docs): 11 requirements (REND-01..04, DOCS-01..07)
+- Phase 10 (Integration + Polish): 0 requirements (validates all previous)
 
 ---
 
