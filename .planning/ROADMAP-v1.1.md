@@ -213,6 +213,14 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - Token-aware truncation with sentence boundary detection
 - Integration with existing depth and minimal mode logic
 
+### Plans
+
+- [ ] **09-01**: Create format_item() dispatcher in src/format/item.rs (REND-01, REND-02)
+- [ ] **09-02**: Create doc comment handler with truncation in src/format/doc.rs (DOCS-01..06)
+- [ ] **09-03**: Create BudgetTracker and integrate with text.rs (REND-04, DOCS-07)
+
+**Plans created:** 2026-02-13 | **Status:** Ready for execution
+
 ---
 
 ## Phase 10: Integration and Polish
@@ -273,7 +281,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 | Phase 6 | ✅ Complete | 7 (FILT-01..07) | 4/4 |
 | Phase 7 | ✅ Complete | 0 (implements Phase 6) | 4/4 |
 | Phase 8 | ✅ Complete | 8 (FIELD-01..08) | 8/8 |
-| Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 |
+| Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 | 3 plans
 | Phase 10 | 🔴 Not Started | 0 (integration) | 0/5 |
 
 ---
