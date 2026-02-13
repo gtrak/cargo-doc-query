@@ -535,14 +535,9 @@ impl TypeExpander {
     }
 }
 
-/// Format a function's signature from its rustdoc item
+/// Format a function's signature from its rustdoc item (without the function name)
 fn format_function_signature(item: &Item, func: &rustdoc_types::Function) -> String {
     let mut sig_parts = Vec::new();
-
-    // Function name
-    if let Some(name) = &item.name {
-        sig_parts.push(name.clone());
-    }
 
     // Generic parameters
     if !func.generics.params.is_empty() {
