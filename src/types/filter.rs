@@ -5,6 +5,7 @@
 
 use crate::types::query::{QueryContent, QueryMatch};
 use glob::Pattern;
+use std::time::Instant;
 use thiserror::Error;
 
 /// Configuration for filtering query results
@@ -232,6 +233,64 @@ impl Filterable for QueryMatch {
     }
 }
 
+/// Statistics from filter application
+#[derive(Debug, Clone, Default)]
+pub struct FilterStats {
+    /// Total items checked
+    pub total_checked: usize,
+    /// Items that passed all filters
+    pub items_passed: usize,
+    /// Items rejected by each filter type
+    pub rejected_by_include: usize,
+    pub rejected_by_exclude: usize,
+    pub rejected_by_kind: usize,
+    pub rejected_by_crate: usize,
+    pub rejected_by_visibility: usize,
+    /// Average time per check (microseconds)
+    pub avg_check_time_us: f64,
+}
+
+impl FilterStats {
+    /// Get rejection rate (0.0 to 1.0)
+    pub fn rejection_rate(&self) -> f64 {
+        if self.total_checked == 0 {
+            return 0.0;
+        }
+        let total_rejected = self.rejected_by_include
+            + self.rejected_by_exclude
+            + self.rejected_by_kind
+            + self.rejected_by_crate
+            + self.rejected_by_visibility;
+        total_rejected as f64 / self.total_checked as f64
+    }
+
+    /// Get pass rate (0.0 to 1.0)
+    pub fn pass_rate(&self) -> f64 {
+        if self.total_checked == 0 {
+            return 1.0;
+        }
+        self.items_passed as f64 / self.total_checked as f64
+    }
+
+    /// Format as human-readable summary
+    pub fn summary(&self) -> String {
+        format!(
+            "Filter Stats: {} checked, {} passed ({:.1}% rejection rate)",
+            self.total_checked,
+            self.items_passed,
+            self.rejection_rate() * 100.0
+        )
+    }
+}
+
+enum RejectionReason {
+    Include,
+    Exclude,
+    Kind,
+    Crate,
+    Visibility,
+}
+
 /// Compiled filter engine for efficient pattern matching
 #[derive(Debug, Clone)]
 pub struct FilterEngine {
@@ -331,21 +390,100 @@ impl FilterEngine {
         true
     }
 
-    /// Filter a slice of QueryMatch items
-    ///
-    /// Returns only items that match all active filters
-    pub fn filter_matches<'a, T: Filterable>(&self, items: &'a [T]) -> Vec<&'a T> {
-        items
-            .iter()
-            .filter(|item| {
-                self.matches(
-                    item.filter_path(),
-                    item.filter_kind(),
-                    item.filter_crate(),
-                    item.filter_visibility(),
-                )
-            })
-            .collect()
+    /// Filter with statistics collection
+    pub fn filter_with_stats<'a, T: Filterable>(
+        &self,
+        items: &'a [T],
+    ) -> (Vec<&'a T>, FilterStats) {
+        let start = Instant::now();
+        let mut stats = FilterStats::default();
+        stats.total_checked = items.len();
+
+        let mut passed = Vec::new();
+
+        for item in items {
+            let (matches, rejection) = self.matches_with_details(
+                item.filter_path(),
+                item.filter_kind(),
+                item.filter_crate(),
+                item.filter_visibility(),
+            );
+
+            if matches {
+                passed.push(item);
+                stats.items_passed += 1;
+            } else if let Some(r) = rejection {
+                match r {
+                    RejectionReason::Include => stats.rejected_by_include += 1,
+                    RejectionReason::Exclude => stats.rejected_by_exclude += 1,
+                    RejectionReason::Kind => stats.rejected_by_kind += 1,
+                    RejectionReason::Crate => stats.rejected_by_crate += 1,
+                    RejectionReason::Visibility => stats.rejected_by_visibility += 1,
+                }
+            }
+        }
+
+        let elapsed = start.elapsed();
+        stats.avg_check_time_us = if stats.total_checked > 0 {
+            elapsed.as_micros() as f64 / stats.total_checked as f64
+        } else {
+            0.0
+        };
+
+        (passed, stats)
+    }
+
+    /// Internal: check match with rejection reason
+    fn matches_with_details(
+        &self,
+        path: &str,
+        kind: &str,
+        crate_name: &str,
+        visibility: &str,
+    ) -> (bool, Option<RejectionReason>) {
+        // Must match at least one include pattern
+        if !self.include.is_empty() {
+            if !self.include.iter().any(|p| p.matches(path)) {
+                return (false, Some(RejectionReason::Include));
+            }
+        }
+
+        // Must not match any exclude pattern
+        if self.exclude.iter().any(|p| p.matches(path)) {
+            return (false, Some(RejectionReason::Exclude));
+        }
+
+        // Must match kind filter
+        if !self.kinds.is_empty() {
+            if !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
+                return (false, Some(RejectionReason::Kind));
+            }
+        }
+
+        // Must match crate filter
+        if !self.crates.is_empty() {
+            if !self.crates.iter().any(|c| c == crate_name) {
+                return (false, Some(RejectionReason::Crate));
+            }
+        }
+
+        // Must match visibility filter
+        if !self.visibilities.is_empty() {
+            if !self.visibilities.iter().any(|v| v == visibility) {
+                return (false, Some(RejectionReason::Visibility));
+            }
+        }
+
+        (true, None)
+    }
+
+    /// Check if this engine has any active filters
+    pub fn is_active(&self) -> bool {
+        !self.include.is_empty()
+            || !self.exclude.is_empty()
+            || !self.kinds.is_empty()
+            || !self.crates.is_empty()
+            || !self.visibilities.is_empty()
     }
 
     /// Filter and clone matches (for owned collections)
@@ -362,15 +500,6 @@ impl FilterEngine {
             })
             .cloned()
             .collect()
-    }
-
-    /// Check if this engine has any active filters
-    pub fn is_active(&self) -> bool {
-        !self.include.is_empty()
-            || !self.exclude.is_empty()
-            || !self.kinds.is_empty()
-            || !self.crates.is_empty()
-            || !self.visibilities.is_empty()
     }
 
     /// Validate that patterns are reasonable and not overly broad
