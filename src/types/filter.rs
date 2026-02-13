@@ -3,6 +3,8 @@
 //! This module provides the FilterConfig and FilterEngine types for filtering
 //! query results based on patterns, kinds, crates, and visibility.
 
+use glob::Pattern;
+
 /// Configuration for filtering query results
 #[derive(Debug, Clone, Default)]
 pub struct FilterConfig {
@@ -85,6 +87,115 @@ impl From<glob::PatternError> for FilterError {
                 .unwrap_or_default(),
             message: err.to_string(),
         }
+    }
+}
+
+/// Compiled filter engine for efficient pattern matching
+#[derive(Debug, Clone)]
+pub struct FilterEngine {
+    /// Compiled include patterns
+    include: Vec<Pattern>,
+    /// Compiled exclude patterns
+    exclude: Vec<Pattern>,
+    /// Kind filters (case-insensitive matching)
+    kinds: Vec<String>,
+    /// Crate name filters
+    crates: Vec<String>,
+    /// Visibility filters
+    visibilities: Vec<String>,
+}
+
+impl FilterEngine {
+    /// Compile FilterConfig into FilterEngine
+    ///
+    /// Returns FilterError if any pattern is invalid
+    pub fn compile(config: &FilterConfig) -> Result<Self, FilterError> {
+        let mut include = Vec::new();
+        for pattern in &config.include {
+            if pattern.is_empty() {
+                return Err(FilterError::EmptyPattern);
+            }
+            match Pattern::new(pattern) {
+                Ok(p) => include.push(p),
+                Err(e) => {
+                    return Err(FilterError::InvalidGlob {
+                        pattern: pattern.clone(),
+                        message: e.to_string(),
+                    })
+                }
+            }
+        }
+
+        let mut exclude = Vec::new();
+        for pattern in &config.exclude {
+            if pattern.is_empty() {
+                return Err(FilterError::EmptyPattern);
+            }
+            match Pattern::new(pattern) {
+                Ok(p) => exclude.push(p),
+                Err(e) => {
+                    return Err(FilterError::InvalidGlob {
+                        pattern: pattern.clone(),
+                        message: e.to_string(),
+                    })
+                }
+            }
+        }
+
+        Ok(Self {
+            include,
+            exclude,
+            kinds: config.kind.iter().map(|k| k.to_lowercase()).collect(),
+            crates: config.crate_filter.clone(),
+            visibilities: config.visibility.clone(),
+        })
+    }
+
+    /// Check if an item matches all active filters (AND logic)
+    pub fn matches(&self, path: &str, kind: &str, crate_name: &str, visibility: &str) -> bool {
+        // Must match at least one include pattern (if any specified)
+        if !self.include.is_empty() {
+            if !self.include.iter().any(|p| p.matches(path)) {
+                return false;
+            }
+        }
+
+        // Must not match any exclude pattern
+        if self.exclude.iter().any(|p| p.matches(path)) {
+            return false;
+        }
+
+        // Must match kind filter (if specified) - case insensitive
+        if !self.kinds.is_empty() {
+            if !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
+                return false;
+            }
+        }
+
+        // Must match crate filter (if specified)
+        if !self.crates.is_empty() {
+            if !self.crates.iter().any(|c| c == crate_name) {
+                return false;
+            }
+        }
+
+        // Must match visibility filter (if specified)
+        if !self.visibilities.is_empty() {
+            if !self.visibilities.iter().any(|v| v == visibility) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Check if this engine has any active filters
+    pub fn is_active(&self) -> bool {
+        !self.include.is_empty()
+            || !self.exclude.is_empty()
+            || !self.kinds.is_empty()
+            || !self.crates.is_empty()
+            || !self.visibilities.is_empty()
     }
 }
 
