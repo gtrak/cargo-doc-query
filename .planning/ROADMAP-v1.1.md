@@ -23,6 +23,8 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ## Phase 6: Foundation — FilterEngine
 
+**Status:** Planned  
+**Plans:** 3 plans in 2 waves  
 **Goal:** Core filtering infrastructure with glob pattern matching
 
 **Phase Goal:** Users can filter query results using include/exclude patterns, crate restrictions, kind filters, and visibility levels.
@@ -51,9 +53,16 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - Phase 5 (v1.0 completion)
 - No new external dependencies (uses existing `glob` crate 0.3.1)
 
+### Plans
+
+- [x] **06-01**: Create FilterConfig and FilterEngine with glob pattern support (FILT-01, FILT-02, FILT-07)
+- [x] **06-02**: Add QueryMatch integration and FilterStats (FILT-03..06)
+- [x] **06-03**: Performance optimization and edge case handling
+
 ### Deliverables
 
 - `src/types/filter.rs` — FilterConfig and FilterEngine structs
+- `benches/filter_benchmark.rs` — Performance benchmarks
 - Unit tests for glob pattern matching
 - Pattern compilation and caching for performance
 
@@ -233,7 +242,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|----------------|---------------------|
-| Phase 6 | 🔴 Not Started | 7 (FILT-01..07) | 0/4 |
+| Phase 6 | 🟡 Planned | 7 (FILT-01..07) | 0/4 |
 | Phase 7 | 🔴 Not Started | 0 (implements Phase 6) | 0/4 |
 | Phase 8 | 🔴 Not Started | 7 (FIELD-01..07) | 0/7 |
 | Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 |
