@@ -35,6 +35,16 @@ impl DetailLevel {
         }
     }
 
+    /// Check if this is Minimal detail level
+    pub fn is_minimal(self) -> bool {
+        matches!(self, Self::Minimal)
+    }
+
+    /// Check if this is Detailed detail level
+    pub fn is_detailed(self) -> bool {
+        matches!(self, Self::Detailed)
+    }
+
     /// Check if this level should include visibility
     pub fn includes_visibility(self) -> bool {
         matches!(self, Self::Standard | Self::Detailed)
@@ -512,6 +522,20 @@ mod tests {
     #[test]
     fn test_detail_level_default() {
         assert_eq!(DetailLevel::default(), DetailLevel::Standard);
+    }
+
+    #[test]
+    fn test_detail_level_is_minimal() {
+        assert!(DetailLevel::Minimal.is_minimal());
+        assert!(!DetailLevel::Standard.is_minimal());
+        assert!(!DetailLevel::Detailed.is_minimal());
+    }
+
+    #[test]
+    fn test_detail_level_is_detailed() {
+        assert!(!DetailLevel::Minimal.is_detailed());
+        assert!(!DetailLevel::Standard.is_detailed());
+        assert!(DetailLevel::Detailed.is_detailed());
     }
 
     #[test]

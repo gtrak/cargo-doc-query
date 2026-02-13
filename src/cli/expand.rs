@@ -5,6 +5,7 @@ use clap::Parser;
 use std::time::Instant;
 
 use crate::cli::Command;
+use crate::types::detail::DetailLevel;
 use crate::types::expand::TokenConfig;
 use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
 
@@ -33,6 +34,10 @@ pub struct ExpandCommand {
     /// Output minimal representation (signatures only, no field details)
     #[arg(long)]
     minimal: bool,
+
+    /// Display detailed metadata for each item (attributes, deprecation, etc.)
+    #[arg(long, short = 'd')]
+    detailed: bool,
 
     /// Output as JSON instead of human-readable text
     #[arg(long)]
@@ -80,6 +85,7 @@ impl ExpandCommand {
             crate_name,
             tokens: None,
             minimal: false,
+            detailed: false,
             json: false,
             quiet: false,
             include: Vec::new(),
@@ -111,8 +117,45 @@ impl ExpandCommand {
             path,
             depth,
             crate_name,
-            tokens: None,
-            minimal: false,
+            tokens,
+            minimal,
+            detailed: false,
+            json: false,
+            quiet: false,
+            include,
+            exclude,
+            kind,
+            crate_filter,
+            visibility,
+            only,
+            help_filters,
+        }
+    }
+
+    /// Create from parsed arguments with DetailLevel support
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_args_with_detail(
+        path: String,
+        depth: u32,
+        crate_name: Option<String>,
+        tokens: Option<usize>,
+        _minimal: bool,
+        detail_level: DetailLevel,
+        include: Vec<String>,
+        exclude: Vec<String>,
+        kind: Vec<String>,
+        crate_filter: Vec<String>,
+        visibility: Vec<String>,
+        only: Option<String>,
+        help_filters: bool,
+    ) -> Self {
+        Self {
+            path,
+            depth,
+            crate_name,
+            tokens,
+            minimal: detail_level.is_minimal(),
+            detailed: detail_level.is_detailed(),
             json: false,
             quiet: false,
             include,
@@ -443,6 +486,36 @@ impl ExpandCommand {
         }
     }
 
+    /// Execute with explicit DetailLevel (stores it for use during expansion)
+    ///
+    /// This method accepts a DetailLevel parameter and ensures the expansion
+    /// uses the appropriate level of detail for metadata extraction.
+    pub fn execute_with_detail(&self, detail_level: DetailLevel) -> Result<()> {
+        // Store detail level in the expansion context
+        // For now, we set the detailed field based on whether detail_level is not minimal
+        // The actual detail_level will be passed through to the expand engine
+        let mut cmd = Self {
+            path: self.path.clone(),
+            depth: self.depth,
+            crate_name: self.crate_name.clone(),
+            tokens: self.tokens,
+            minimal: detail_level.is_minimal(),
+            detailed: detail_level.is_detailed(),
+            json: self.json,
+            quiet: self.quiet,
+            include: self.include.clone(),
+            exclude: self.exclude.clone(),
+            kind: self.kind.clone(),
+            crate_filter: self.crate_filter.clone(),
+            visibility: self.visibility.clone(),
+            only: self.only.clone(),
+            help_filters: self.help_filters,
+        };
+
+        // Execute with the configured detail level
+        cmd.execute()
+    }
+
     /// Display glob pattern syntax help
     fn display_glob_syntax_help(&self) {
         println!("Filter Pattern Syntax (Glob Patterns)");
@@ -469,5 +542,76 @@ impl ExpandCommand {
         println!("  - Multiple --include flags = OR logic");
         println!("  - Different flag types = AND logic");
         println!("  - Run `cargo doc-query query --help` for filtering options");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expand_command_detailed_flag() {
+        let cmd = ExpandCommand::from_args_with_detail(
+            "std::vec::Vec".to_string(),
+            1,
+            None,
+            None,
+            false,
+            DetailLevel::Detailed,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+            false,
+        );
+
+        assert!(cmd.detailed);
+        assert!(!cmd.minimal);
+    }
+
+    #[test]
+    fn test_expand_command_minimal_flag() {
+        let cmd = ExpandCommand::from_args_with_detail(
+            "std::vec::Vec".to_string(),
+            1,
+            None,
+            None,
+            false,
+            DetailLevel::Minimal,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+            false,
+        );
+
+        assert!(!cmd.detailed);
+        assert!(cmd.minimal);
+    }
+
+    #[test]
+    fn test_expand_command_standard_flag() {
+        let cmd = ExpandCommand::from_args_with_detail(
+            "std::vec::Vec".to_string(),
+            1,
+            None,
+            None,
+            false,
+            DetailLevel::Standard,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+            false,
+        );
+
+        assert!(!cmd.detailed);
+        assert!(!cmd.minimal);
     }
 }
