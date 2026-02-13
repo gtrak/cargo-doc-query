@@ -136,6 +136,27 @@ pub struct TypeNode {
     /// Variant count (for minimal mode reference)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variant_count: Option<usize>,
+    /// Whether the item is deprecated
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_deprecated: Option<bool>,
+    /// Deprecation note/replacement hint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deprecation_note: Option<String>,
+    /// Key attributes: #[must_use], #[non_exhaustive]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attributes: Vec<String>,
+    /// Function modifier: const
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_const: Option<bool>,
+    /// Function modifier: async
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_async: Option<bool>,
+    /// Function modifier: unsafe
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_unsafe: Option<bool>,
+    /// Function ABI (None for Rust ABI)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub abi: Option<String>,
 }
 
 /// Minimal version of TypeNode for reduced output
@@ -290,7 +311,42 @@ impl TypeNode {
             depth,
             field_count: None,
             variant_count: None,
+            is_deprecated: None,
+            deprecation_note: None,
+            attributes: Vec::new(),
+            is_const: None,
+            is_async: None,
+            is_unsafe: None,
+            abi: None,
         }
+    }
+
+    /// Set deprecation information
+    pub fn with_deprecation(mut self, is_deprecated: bool, note: Option<String>) -> Self {
+        self.is_deprecated = Some(is_deprecated);
+        self.deprecation_note = note;
+        self
+    }
+
+    /// Set semantic attributes
+    pub fn with_attributes(mut self, attrs: Vec<String>) -> Self {
+        self.attributes = attrs;
+        self
+    }
+
+    /// Set function modifiers
+    pub fn with_function_modifiers(
+        mut self,
+        is_const: bool,
+        is_async: bool,
+        is_unsafe: bool,
+        abi: Option<String>,
+    ) -> Self {
+        self.is_const = Some(is_const);
+        self.is_async = Some(is_async);
+        self.is_unsafe = Some(is_unsafe);
+        self.abi = abi;
+        self
     }
 
     /// Add a field to this type
@@ -327,6 +383,13 @@ impl TypeNode {
             depth: self.depth,
             field_count: Some(self.fields.len()),
             variant_count: Some(self.variants.len()),
+            is_deprecated: None,
+            deprecation_note: None,
+            attributes: Vec::new(),
+            is_const: None,
+            is_async: None,
+            is_unsafe: None,
+            abi: None,
         }
     }
 
