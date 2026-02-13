@@ -14,6 +14,7 @@ use cli::expand::ExpandCommand;
 use cli::Command;
 use error::errors::AppError;
 use std::process::ExitCode;
+use types::detail::DetailLevel;
 
 /// Global configuration shared across all commands
 pub struct GlobalConfig {
@@ -136,6 +137,10 @@ enum Commands {
         #[arg(long)]
         minimal: bool,
 
+        /// Display detailed metadata for each item (attributes, deprecation, etc.)
+        #[arg(long, short = 'd')]
+        detailed: bool,
+
         /// Maximum tokens in output (approximate)
         #[arg(long, value_name = "N")]
         tokens: Option<usize>,
@@ -228,6 +233,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
             depth,
             crate_name,
             minimal,
+            detailed,
             tokens,
             json,
             include,
@@ -254,12 +260,22 @@ fn run(cli: Cli) -> Result<(), AppError> {
             // Always use expand (unified rendering)
             // Default depth is 1 to show submodules, depth=0 shows just the type
             let depth = if *depth == 0 { 1 } else { *depth };
-            let mut cmd = ExpandCommand::from_args(
+
+            // Compute DetailLevel from flags (minimal takes precedence)
+            let detail_level = DetailLevel::from_flags(*minimal, *detailed);
+
+            // Warn if both flags are specified
+            if *minimal && *detailed && !quiet {
+                eprintln!("Warning: --minimal takes precedence over --detailed");
+            }
+
+            let mut cmd = ExpandCommand::from_args_with_detail(
                 path.clone(),
                 depth,
                 crate_name.clone(),
                 *tokens,
                 *minimal,
+                detail_level,
                 include.clone(),
                 exclude.clone(),
                 kind.clone(),
