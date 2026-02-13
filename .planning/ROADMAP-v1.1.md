@@ -218,8 +218,10 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - [x] **09-01**: Create format_item() dispatcher in src/format/item.rs (REND-01, REND-02)
 - [x] **09-02**: Create doc comment handler with truncation in src/format/doc.rs (DOCS-01..06)
 - [x] **09-03**: Create BudgetTracker and integrate with text.rs (REND-04, DOCS-07)
+- [x] **09-04**: Wire DocHandler into ItemFormatter for budget-aware truncation (gap closure)
+- [x] **09-05**: Wire unified formatter into CLI expand command (gap closure)
 
-**Plans:** 3 plans in 2 waves | **Status:** Ready for execution
+**Plans:** 5 plans in 1 wave | **Status:** Gap closure in progress
 
 ---
 
