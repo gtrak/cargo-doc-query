@@ -11,6 +11,11 @@ use crate::cache::store::SerializableIndex;
 use crate::parser::serde_helper::deserialize_with_stack;
 use crate::query::format::TypeFormatter;
 use crate::query::lookup::PathResolver;
+use crate::types::detail::DetailLevel;
+use crate::types::detail::{
+    extract_deprecation_info, extract_function_modifiers, extract_semantic_attrs, format_generics,
+    visibility_to_string,
+};
 use crate::types::doc::DocExtractor;
 use crate::types::query::*;
 
@@ -21,6 +26,7 @@ pub struct QueryOptions {
     include_private: bool,
     minimal_mode: bool,
     token_budget: Option<usize>,
+    detail_level: DetailLevel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +46,7 @@ impl QueryOptions {
             include_private: false,
             minimal_mode: false,
             token_budget: None,
+            detail_level: DetailLevel::Standard,
         }
     }
 
@@ -67,6 +74,12 @@ impl QueryOptions {
         self
     }
 
+    /// Set detail level
+    pub fn with_detail_level(mut self, detail_level: DetailLevel) -> Self {
+        self.detail_level = detail_level;
+        self
+    }
+
     /// Get query kind
     pub fn kind(&self) -> &QueryKind {
         &self.kind
@@ -90,6 +103,11 @@ impl QueryOptions {
     /// Get token_budget
     pub fn token_budget(&self) -> Option<usize> {
         self.token_budget
+    }
+
+    /// Get detail level
+    pub fn detail_level(&self) -> DetailLevel {
+        self.detail_level
     }
 }
 
@@ -206,14 +224,48 @@ impl QueryEngine {
             for (id, item) in items {
                 let kind = Self::item_kind(item)?;
                 let content = self.extract_content(krate, id, item, &kind, options)?;
+                let qualified_path = self.get_qualified_path(krate, id)?;
 
-                matches.push(QueryMatch::new(
+                // Create base QueryMatch
+                let mut query_match = QueryMatch::new(
                     crate_name.clone(),
                     crate_version.clone(),
-                    self.get_qualified_path(krate, id)?,
+                    qualified_path,
                     kind,
                     content,
-                ));
+                );
+
+                // Populate metadata based on DetailLevel
+                let detail_level = options.detail_level();
+
+                // FIELD-01: Visibility (Standard and Detailed)
+                if detail_level.includes_visibility() {
+                    query_match =
+                        query_match.with_visibility(visibility_to_string(&item.visibility));
+                }
+
+                // FIELD-03: Generics (Standard and Detailed)
+                if detail_level.includes_generics() {
+                    if let Some(generics) = Self::extract_generics_from_item(item) {
+                        query_match = query_match.with_generics(generics);
+                    }
+                }
+
+                // FIELD-02, FIELD-04: Deprecation and Attributes (Detailed only)
+                if detail_level.includes_deprecation() {
+                    if let Some((_, note)) = extract_deprecation_info(item.deprecation.as_ref()) {
+                        query_match = query_match.with_deprecation(note);
+                    }
+                }
+
+                if detail_level.includes_attributes() {
+                    let attrs = extract_semantic_attrs(&item.attrs);
+                    if !attrs.is_empty() {
+                        query_match = query_match.with_attributes(attrs);
+                    }
+                }
+
+                matches.push(query_match);
             }
 
             // Only load first crate that has the type
@@ -272,6 +324,19 @@ impl QueryEngine {
             .unwrap_or_else(|| format!("{:?}", id)))
     }
 
+    /// Extract generics from an item if it has them
+    fn extract_generics_from_item(item: &Item) -> Option<String> {
+        match &item.inner {
+            ItemEnum::Struct(s) => format_generics(&s.generics),
+            ItemEnum::Enum(e) => format_generics(&e.generics),
+            ItemEnum::Function(f) => format_generics(&f.generics),
+            ItemEnum::Trait(t) => format_generics(&t.generics),
+            ItemEnum::TypeAlias(t) => format_generics(&t.generics),
+            ItemEnum::Union(u) => format_generics(&u.generics),
+            _ => None,
+        }
+    }
+
     /// Extract content based on item kind and query options
     fn extract_content(
         &self,
@@ -318,7 +383,7 @@ impl QueryEngine {
         krate: &Crate,
         id: Id,
         item: &Item,
-        _options: &QueryOptions,
+        options: &QueryOptions,
         _crate_key: &str,
     ) -> Result<TypeResult> {
         // Determine type kind
@@ -333,6 +398,7 @@ impl QueryEngine {
         // Extract inherent methods (impl without trait)
         let mut methods = Vec::new();
         let mut trait_impls = Vec::new();
+        let detail_level = options.detail_level();
 
         for item_ref in krate.index.values() {
             if let ItemEnum::Impl(impl_block) = &item_ref.inner {
@@ -340,7 +406,8 @@ impl QueryEngine {
                 if self.impl_is_for_type(impl_block, id) {
                     if let Some(trait_path) = &impl_block.trait_ {
                         // Trait implementation
-                        let trait_methods = self.extract_impl_methods(krate, impl_block)?;
+                        let trait_methods =
+                            self.extract_impl_methods(krate, impl_block, detail_level)?;
                         let mut impl_output =
                             TraitImplOutput::new(trait_path.path.clone(), trait_path.path.clone());
                         trait_methods
@@ -349,7 +416,8 @@ impl QueryEngine {
                         trait_impls.push(impl_output);
                     } else {
                         // Inherent impl (methods)
-                        let impl_methods = self.extract_impl_methods(krate, impl_block)?;
+                        let impl_methods =
+                            self.extract_impl_methods(krate, impl_block, detail_level)?;
                         methods.extend(impl_methods);
                     }
                 }
@@ -357,6 +425,14 @@ impl QueryEngine {
         }
 
         let mut result = TypeResult::new(kind_str.to_string());
+
+        // FIELD-03: Generic parameters (Standard and Detailed)
+        if detail_level.includes_generics() {
+            if let Some(generics) = Self::extract_generics_from_item(item) {
+                result = result.with_generic_params(generics);
+            }
+        }
+
         methods.into_iter().for_each(|m| result.add_method(m));
         trait_impls
             .into_iter()
@@ -374,13 +450,18 @@ impl QueryEngine {
     }
 
     /// Extract methods from an impl block
-    fn extract_impl_methods(&self, krate: &Crate, impl_block: &Impl) -> Result<Vec<MethodOutput>> {
+    fn extract_impl_methods(
+        &self,
+        krate: &Crate,
+        impl_block: &Impl,
+        detail_level: DetailLevel,
+    ) -> Result<Vec<MethodOutput>> {
         let mut methods = Vec::new();
 
         for item_id in &impl_block.items {
             if let Some(item) = krate.index.get(item_id) {
                 if let ItemEnum::Function(func) = &item.inner {
-                    methods.push(self.extract_method(item, func)?);
+                    methods.push(self.extract_method(item, func, detail_level)?);
                 }
             }
         }
@@ -393,8 +474,10 @@ impl QueryEngine {
         &self,
         krate: &Crate,
         item: &Item,
-        _options: &QueryOptions,
+        options: &QueryOptions,
     ) -> Result<TraitResult> {
+        let detail_level = options.detail_level();
+
         if let ItemEnum::Trait(trait_def) = &item.inner {
             let trait_path = self.get_qualified_path(krate, item.id)?;
 
@@ -403,7 +486,7 @@ impl QueryEngine {
             for item_id in &trait_def.items {
                 if let Some(func_item) = krate.index.get(item_id) {
                     if let ItemEnum::Function(func) = &func_item.inner {
-                        methods.push(self.extract_method(func_item, func)?);
+                        methods.push(self.extract_method(func_item, func, detail_level)?);
                     }
                 }
             }
@@ -435,6 +518,15 @@ impl QueryEngine {
             }
 
             let mut result = TraitResult::new(item.name.clone().unwrap_or_default(), trait_path);
+
+            // FIELD-03: Generic parameters (Standard and Detailed)
+            if detail_level.includes_generics() {
+                let generics = format_generics(&trait_def.generics);
+                if let Some(g) = generics {
+                    result = result.with_generic_params(g);
+                }
+            }
+
             methods.into_iter().for_each(|m| result.add_method(m));
             associated_types
                 .into_iter()
@@ -494,18 +586,35 @@ impl QueryEngine {
     }
 
     /// Extract a single method output
-    fn extract_method(&self, item: &Item, func: &Function) -> Result<MethodOutput> {
+    fn extract_method(
+        &self,
+        item: &Item,
+        func: &Function,
+        detail_level: DetailLevel,
+    ) -> Result<MethodOutput> {
         let docs = DocExtractor::extract_docs(item);
+        let visibility = visibility_to_string(&item.visibility);
 
         let mut method = MethodOutput::new(
             item.name.clone().unwrap_or_default(),
             TypeFormatter::format_signature(&func.sig),
             TypeFormatter::format_return_type(&func.sig.output),
-            "public".to_string(),
+            visibility,
             true,
         );
         method = method.with_docs(docs);
         method = method.with_is_trait_method(false);
+
+        // FIELD-05: Function modifiers (Detailed only)
+        if detail_level.includes_function_modifiers() {
+            let (is_const, is_async, is_unsafe, abi) = extract_function_modifiers(&func.header);
+
+            method = method
+                .with_is_const(is_const)
+                .with_is_async(is_async)
+                .with_is_unsafe(is_unsafe)
+                .with_abi(abi);
+        }
 
         Ok(method)
     }

@@ -9,6 +9,11 @@ use thiserror::Error;
 use crate::cache::store::SerializableIndex;
 use crate::parser::serde_helper::deserialize_with_stack;
 use crate::query::lookup::PathResolver;
+use crate::types::detail::DetailLevel;
+use crate::types::detail::{
+    extract_deprecation_info, extract_function_modifiers, extract_semantic_attrs, format_generics,
+    visibility_to_string,
+};
 use crate::types::expand::{ExpansionResult, FieldInfo, TokenConfig, TypeGraph, TypeNode};
 
 /// Errors that can occur during type expansion
@@ -35,16 +40,27 @@ pub struct TypeExpander {
     token_config: TokenConfig,
     current_token_count: usize,
     truncated: Vec<String>,
+    detail_level: DetailLevel,
 }
 
 impl TypeExpander {
     /// Create new expander with default config
     pub fn new(index: SerializableIndex, depth_limit: u32) -> Self {
-        Self::with_config(index, depth_limit, TokenConfig::default())
+        Self::with_config(
+            index,
+            depth_limit,
+            TokenConfig::default(),
+            DetailLevel::Standard,
+        )
     }
 
     /// Create new expander with custom config
-    pub fn with_config(index: SerializableIndex, depth_limit: u32, config: TokenConfig) -> Self {
+    pub fn with_config(
+        index: SerializableIndex,
+        depth_limit: u32,
+        config: TokenConfig,
+        detail_level: DetailLevel,
+    ) -> Self {
         Self {
             index,
             crates: HashMap::new(),
@@ -54,6 +70,7 @@ impl TypeExpander {
             token_config: config,
             current_token_count: 0,
             truncated: Vec::new(),
+            detail_level,
         }
     }
 
@@ -187,7 +204,7 @@ impl TypeExpander {
                         // crate_name is actually the key (name::version)
                         let krate = self.crates.get(&crate_name).unwrap();
                         let type_path = self.get_path(krate, id);
-                        let visibility = self.visibility_to_string(item.visibility.clone());
+                        let visibility = visibility_to_string(&item.visibility);
                         let mut node = TypeNode::with_crate_visibility(
                             type_path.clone(),
                             "function".to_string(),
@@ -294,7 +311,7 @@ impl TypeExpander {
         // Extract crate name from path for filtering
         let crate_name = self.extract_crate_name(&crate_name, &type_path);
         // Get visibility from item
-        let visibility = self.visibility_to_string(item.visibility);
+        let visibility = visibility_to_string(&item.visibility);
 
         let mut node = TypeNode::with_crate_visibility(
             type_path.clone(),
@@ -303,6 +320,34 @@ impl TypeExpander {
             crate_name,
             visibility,
         );
+
+        // Populate metadata based on DetailLevel
+        let detail_level = self.detail_level;
+
+        // FIELD-03: Generic parameters (Standard and Detailed)
+        if detail_level.includes_generics() {
+            if let Some(generics) = Self::extract_generics_from_item(&item) {
+                if let Some(generics_str) = format_generics(&generics) {
+                    if !generics_str.is_empty() {
+                        node.add_generic_param(generics_str);
+                    }
+                }
+            }
+        }
+
+        // FIELD-02, FIELD-04: Deprecation and Attributes (Detailed only)
+        if detail_level.includes_deprecation() {
+            if let Some((_, note)) = extract_deprecation_info(item.deprecation.as_ref()) {
+                node = node.with_deprecation(true, note);
+            }
+        }
+
+        if detail_level.includes_attributes() {
+            let attrs = extract_semantic_attrs(&item.attrs);
+            if !attrs.is_empty() {
+                node = node.with_attributes(attrs);
+            }
+        }
 
         // Extract fields/variants based on type kind
         match &item.inner {
@@ -445,7 +490,7 @@ impl TypeExpander {
             "module".to_string(),
             depth,
             self.extract_crate_name(crate_name, &module_path),
-            self.visibility_to_string(module_item.visibility),
+            visibility_to_string(&module_item.visibility),
         );
         let mut submodules_to_expand: Vec<Id> = Vec::new();
 
@@ -585,16 +630,16 @@ impl TypeExpander {
         }
     }
 
-    /// Convert rustdoc Visibility to string representation
-    fn visibility_to_string(&self, vis: rustdoc_types::Visibility) -> String {
-        match vis {
-            rustdoc_types::Visibility::Public => "pub".to_string(),
-            rustdoc_types::Visibility::Default => "private".to_string(),
-            rustdoc_types::Visibility::Crate => "pub(crate)".to_string(),
-            rustdoc_types::Visibility::Restricted { parent: _, path } => {
-                // pub(in path) - extract path string
-                format!("pub(in {})", path)
-            }
+    /// Extract generics from an item
+    fn extract_generics_from_item(item: &Item) -> Option<rustdoc_types::Generics> {
+        match &item.inner {
+            ItemEnum::Struct(s) => Some(s.generics.clone()),
+            ItemEnum::Enum(e) => Some(e.generics.clone()),
+            ItemEnum::Function(f) => Some(f.generics.clone()),
+            ItemEnum::Trait(t) => Some(t.generics.clone()),
+            ItemEnum::TypeAlias(t) => Some(t.generics.clone()),
+            ItemEnum::Union(u) => Some(u.generics.clone()),
+            _ => None,
         }
     }
 }
@@ -662,7 +707,12 @@ fn format_type_signature(ty: &rustdoc_types::Type) -> String {
     }
 }
 
-pub fn expand_type(path: &str, depth: u32, crate_filter: Option<&str>) -> Result<ExpansionResult> {
+pub fn expand_type(
+    path: &str,
+    depth: u32,
+    crate_filter: Option<&str>,
+    detail_level: DetailLevel,
+) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
         .map_err(|e| ExpandError::Other(e.into()))?
         .load_current()
@@ -670,6 +720,7 @@ pub fn expand_type(path: &str, depth: u32, crate_filter: Option<&str>) -> Result
         .ok_or(ExpandError::NoCache)?;
 
     let mut expander = TypeExpander::new(index, depth);
+    expander.detail_level = detail_level;
     expander.expand(path, crate_filter)
 }
 
@@ -678,6 +729,7 @@ pub fn expand_type_with_config(
     depth: u32,
     crate_filter: Option<&str>,
     config: TokenConfig,
+    detail_level: DetailLevel,
 ) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
         .map_err(|e| ExpandError::Other(e.into()))?
@@ -685,7 +737,7 @@ pub fn expand_type_with_config(
         .map_err(|e| ExpandError::Other(e.into()))?
         .ok_or(ExpandError::NoCache)?;
 
-    let mut expander = TypeExpander::with_config(index, depth, config);
+    let mut expander = TypeExpander::with_config(index, depth, config, detail_level);
     expander.expand(path, crate_filter)
 }
 
@@ -730,7 +782,7 @@ mod tests {
                 nodes: vec![],
                 edges: vec![],
             },
-            10,
+            10, // depth_limit
         );
 
         assert!(!expander.would_exceed_budget(100));
@@ -746,8 +798,9 @@ mod tests {
                 nodes: vec![],
                 edges: vec![],
             },
-            10,
+            10, // depth_limit
             config,
+            DetailLevel::Standard,
         );
 
         assert!(!expander.would_exceed_budget(5));
@@ -766,8 +819,9 @@ mod tests {
                 nodes: vec![],
                 edges: vec![],
             },
-            10,
+            10, // depth_limit
             config,
+            DetailLevel::Standard,
         );
 
         expander.add_tokens(10);
@@ -784,8 +838,9 @@ mod tests {
                 nodes: vec![],
                 edges: vec![],
             },
-            10,
+            10, // depth_limit
             config,
+            DetailLevel::Standard,
         );
 
         // At default threshold of 0.8 (80 tokens), should not be approaching
@@ -810,8 +865,9 @@ mod tests {
                 nodes: vec![],
                 edges: vec![],
             },
-            10,
+            10, // depth_limit
             config,
+            DetailLevel::Standard,
         );
 
         // At 0.5 threshold (50 tokens), should approach at 50

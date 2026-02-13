@@ -365,6 +365,9 @@ impl ExpandCommand {
             .with_budget(self.tokens)
             .with_minimal(self.minimal);
 
+        // Determine detail level from flags
+        let detail_level = DetailLevel::from_flags(self.minimal, self.detailed);
+
         // Time the expansion execution
         let start = Instant::now();
 
@@ -374,6 +377,7 @@ impl ExpandCommand {
             self.depth,
             self.crate_name.as_deref(),
             token_config,
+            detail_level,
         )
         .context(format!("Expansion failed for path: {}", self.path))?;
 
