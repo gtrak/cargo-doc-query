@@ -58,6 +58,11 @@ pub struct TypeResult {
     pub kind: String, // "struct", "enum", "type alias", etc.
     pub methods: Vec<MethodOutput>,
     pub trait_implementations: Vec<TraitImplOutput>,
+
+    // New field for FIELD-03
+    /// Generic parameters for the type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generic_params: Option<String>,
 }
 
 /// Result of a trait query
@@ -69,6 +74,11 @@ pub struct TraitResult {
     pub associated_types: Vec<AssociatedTypeOutput>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub provided_methods: Vec<String>,
+
+    // New field for FIELD-03
+    /// Generic parameters for the trait
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generic_params: Option<String>,
 }
 
 /// Result of a module query
@@ -270,7 +280,14 @@ impl TypeResult {
             kind,
             methods: Vec::new(),
             trait_implementations: Vec::new(),
+            generic_params: None,
         }
+    }
+
+    /// Set the generic parameters
+    pub fn with_generic_params(mut self, params: impl Into<String>) -> Self {
+        self.generic_params = Some(params.into());
+        self
     }
 
     /// Add a method to the type result
@@ -293,6 +310,7 @@ impl TypeResult {
                 .iter()
                 .map(|t| t.to_minimal())
                 .collect(),
+            generic_params: None, // FIELD-06: omitted in minimal mode
         }
     }
 }
@@ -306,7 +324,14 @@ impl TraitResult {
             methods: Vec::new(),
             associated_types: Vec::new(),
             provided_methods: Vec::new(),
+            generic_params: None,
         }
+    }
+
+    /// Set the generic parameters
+    pub fn with_generic_params(mut self, params: impl Into<String>) -> Self {
+        self.generic_params = Some(params.into());
+        self
     }
 
     /// Add a method to the trait result
@@ -332,6 +357,7 @@ impl TraitResult {
             methods: self.methods.iter().map(|m| m.to_minimal()).collect(),
             associated_types: self.associated_types.clone(),
             provided_methods: Vec::new(), // Omit provided methods
+            generic_params: None,         // FIELD-06: omitted in minimal mode
         }
     }
 }
