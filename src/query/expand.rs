@@ -457,11 +457,18 @@ impl TypeExpander {
                         }
                     } else {
                         // Add as module item (not a field!)
-                        let module_item = crate::types::expand::ModuleItemInfo::new(
+                        let mut module_item = crate::types::expand::ModuleItemInfo::new(
                             name,
                             kind.to_string(),
                             item_path,
                         );
+                        // Extract signature for functions
+                        if kind == "function" {
+                            if let ItemEnum::Function(func) = &item.inner {
+                                let signature = format_function_signature(item, func);
+                                module_item = module_item.with_signature(signature);
+                            }
+                        }
                         node.add_item(module_item);
                     }
                 }
