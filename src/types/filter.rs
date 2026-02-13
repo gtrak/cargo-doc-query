@@ -3,6 +3,7 @@
 //! This module provides the FilterConfig and FilterEngine types for filtering
 //! query results based on patterns, kinds, crates, and visibility.
 
+use crate::types::query::{QueryContent, QueryMatch};
 use glob::Pattern;
 use thiserror::Error;
 
@@ -186,6 +187,51 @@ impl From<glob::PatternError> for FilterError {
     }
 }
 
+/// Trait for items that can be filtered
+pub trait Filterable {
+    /// Get the fully qualified path of the item
+    fn filter_path(&self) -> &str;
+    /// Get the item kind (struct, enum, trait, function, etc.)
+    fn filter_kind(&self) -> &str;
+    /// Get the crate name
+    fn filter_crate(&self) -> &str;
+    /// Get the visibility as a string
+    fn filter_visibility(&self) -> &str;
+}
+
+impl Filterable for QueryMatch {
+    fn filter_path(&self) -> &str {
+        &self.fully_qualified_path
+    }
+
+    fn filter_kind(&self) -> &str {
+        &self.kind
+    }
+
+    fn filter_crate(&self) -> &str {
+        &self.crate_name
+    }
+
+    fn filter_visibility(&self) -> &str {
+        // Try to get visibility from content
+        match &self.content {
+            QueryContent::Type(t) => {
+                // Check if any method has visibility info
+                t.methods
+                    .first()
+                    .map(|m| m.visibility.as_str())
+                    .unwrap_or("pub")
+            }
+            QueryContent::Trait(tr) => tr
+                .methods
+                .first()
+                .map(|m| m.visibility.as_str())
+                .unwrap_or("pub"),
+            QueryContent::Module(_) => "pub",
+        }
+    }
+}
+
 /// Compiled filter engine for efficient pattern matching
 #[derive(Debug, Clone)]
 pub struct FilterEngine {
@@ -283,6 +329,39 @@ impl FilterEngine {
         }
 
         true
+    }
+
+    /// Filter a slice of QueryMatch items
+    ///
+    /// Returns only items that match all active filters
+    pub fn filter_matches<'a, T: Filterable>(&self, items: &'a [T]) -> Vec<&'a T> {
+        items
+            .iter()
+            .filter(|item| {
+                self.matches(
+                    item.filter_path(),
+                    item.filter_kind(),
+                    item.filter_crate(),
+                    item.filter_visibility(),
+                )
+            })
+            .collect()
+    }
+
+    /// Filter and clone matches (for owned collections)
+    pub fn filter_matches_owned<T: Filterable + Clone>(&self, items: &[T]) -> Vec<T> {
+        items
+            .iter()
+            .filter(|item| {
+                self.matches(
+                    item.filter_path(),
+                    item.filter_kind(),
+                    item.filter_crate(),
+                    item.filter_visibility(),
+                )
+            })
+            .cloned()
+            .collect()
     }
 
     /// Check if this engine has any active filters
