@@ -112,6 +112,10 @@ pub struct TypeNode {
     pub id: String,
     /// Type kind: struct, enum, module, primitive, generic, etc.
     pub kind: String,
+    /// Crate name for filtering
+    pub crate_name: String,
+    /// Visibility for filtering
+    pub visibility: String,
     /// Fields (for struct-like types)
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<FieldInfo>,
@@ -141,6 +145,10 @@ pub struct MinimalTypeNode {
     pub id: String,
     /// Type kind
     pub kind: String,
+    /// Crate name for filtering
+    pub crate_name: String,
+    /// Visibility for filtering
+    pub visibility: String,
     /// Number of fields (if struct-like)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_count: Option<usize>,
@@ -259,9 +267,22 @@ impl TypeGraph {
 impl TypeNode {
     /// Create a new type node
     pub fn new(id: String, kind: String, depth: u32) -> Self {
+        Self::with_crate_visibility(id, kind, depth, String::new(), String::new())
+    }
+
+    /// Create a new type node with crate name and visibility
+    pub fn with_crate_visibility(
+        id: String,
+        kind: String,
+        depth: u32,
+        crate_name: String,
+        visibility: String,
+    ) -> Self {
         Self {
             id,
             kind,
+            crate_name,
+            visibility,
             fields: Vec::new(),
             variants: Vec::new(),
             items: Vec::new(),
@@ -297,6 +318,8 @@ impl TypeNode {
         Self {
             id: self.id.clone(),
             kind: self.kind.clone(),
+            crate_name: self.crate_name.clone(),
+            visibility: self.visibility.clone(),
             fields: Vec::new(),         // Omit field details
             variants: Vec::new(),       // Omit variant details
             items: Vec::new(),          // Omit item details

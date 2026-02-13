@@ -186,7 +186,14 @@ impl TypeExpander {
                         // crate_name is actually the key (name::version)
                         let krate = self.crates.get(&crate_name).unwrap();
                         let type_path = self.get_path(krate, id);
-                        let mut node = TypeNode::new(type_path.clone(), "function".to_string(), 0);
+                        let visibility = self.visibility_to_string(item.visibility.clone());
+                        let mut node = TypeNode::with_crate_visibility(
+                            type_path.clone(),
+                            "function".to_string(),
+                            0,
+                            self.extract_crate_name(&crate_name, &type_path),
+                            visibility,
+                        );
 
                         // Extract function signature from function item
                         let signature = format_function_signature(&item, func);
@@ -283,7 +290,18 @@ impl TypeExpander {
             _ => "type",
         };
 
-        let mut node = TypeNode::new(type_path.clone(), kind.to_string(), depth);
+        // Extract crate name from path for filtering
+        let crate_name = self.extract_crate_name(&crate_name, &type_path);
+        // Get visibility from item
+        let visibility = self.visibility_to_string(item.visibility);
+
+        let mut node = TypeNode::with_crate_visibility(
+            type_path.clone(),
+            kind.to_string(),
+            depth,
+            crate_name,
+            visibility,
+        );
 
         // Extract fields/variants based on type kind
         match &item.inner {
@@ -421,7 +439,13 @@ impl TypeExpander {
         let krate = krate.clone();
 
         let module_path = self.get_path(&krate, *module_id);
-        let mut node = TypeNode::new(module_path, "module".to_string(), depth);
+        let mut node = TypeNode::with_crate_visibility(
+            module_path.clone(),
+            "module".to_string(),
+            depth,
+            self.extract_crate_name(crate_name, &module_path),
+            self.visibility_to_string(module_item.visibility),
+        );
         let mut submodules_to_expand: Vec<Id> = Vec::new();
 
         // Get module items
@@ -547,6 +571,30 @@ impl TypeExpander {
             .get(&id)
             .map(|summary| summary.path.join("::"))
             .unwrap_or_else(|| format!("{:?}", id))
+    }
+
+    /// Extract crate name from path (first segment)
+    fn extract_crate_name(&self, crate_name: &str, path: &str) -> String {
+        // Use the crate_name from the search if it's specific
+        if crate_name.starts_with(&format!("{}::", crate_name)) {
+            crate_name.to_string()
+        } else {
+            // Extract from path
+            path.split("::").next().unwrap_or(crate_name).to_string()
+        }
+    }
+
+    /// Convert rustdoc Visibility to string representation
+    fn visibility_to_string(&self, vis: rustdoc_types::Visibility) -> String {
+        match vis {
+            rustdoc_types::Visibility::Public => "pub".to_string(),
+            rustdoc_types::Visibility::Default => "private".to_string(),
+            rustdoc_types::Visibility::Crate => "pub(crate)".to_string(),
+            rustdoc_types::Visibility::Restricted { parent: _, path } => {
+                // pub(in path) - extract path string
+                format!("pub(in {})", path)
+            }
+        }
     }
 }
 
