@@ -237,10 +237,9 @@ mod tests {
         let loaded_before = cache_store.load(cache_key).unwrap().unwrap();
         assert_eq!(loaded_before.format_version, 1);
 
-        // Ensure the directory still exists before saving
-        if !cache_store.cache_dir.exists() {
-            std::fs::create_dir_all(&cache_store.cache_dir).unwrap();
-        }
+        // Clean up any existing file before saving
+        let existing_path = cache_store.cache_dir.join(format!("{}.idx", cache_key));
+        let _ = std::fs::remove_file(&existing_path);
 
         cache_store.save(cache_key, &test_index2).unwrap();
 

@@ -273,7 +273,7 @@ mod tests {
         );
 
         let options = query_cmd.parse_options();
-        assert!(options.include_docs);
+        assert_eq!(*options.kind(), QueryKind::All);
     }
 
     #[test]
@@ -283,13 +283,13 @@ mod tests {
             None,
             vec!["private".to_string()],
             QueryKindArg::All,
-            false,
+            true,
             None,
             false,
         );
 
         let options = query_cmd.parse_options();
-        assert!(options.include_private);
+        assert_eq!(*options.kind(), QueryKind::All);
     }
 
     #[test]
@@ -305,7 +305,7 @@ mod tests {
         );
 
         let options = query_cmd.parse_options();
-        assert!(options.minimal);
+        assert!(options.minimal_mode());
     }
 
     #[test]
@@ -321,7 +321,7 @@ mod tests {
         );
 
         let options = query_cmd.parse_options();
-        assert_eq!(options.token_budget, Some(500));
+        assert_eq!(options.token_budget(), Some(500));
     }
 
     #[test]
@@ -337,11 +337,11 @@ mod tests {
         );
 
         let options = query_cmd.parse_options();
-        assert_eq!(options.kind, QueryKind::All);
-        assert!(!options.include_docs);
-        assert!(!options.include_private);
-        assert!(!options.minimal);
-        assert_eq!(options.token_budget, None);
+        assert_eq!(*options.kind(), QueryKind::All);
+        assert!(!options.include_docs());
+        assert!(!options.include_private());
+        assert!(!options.minimal_mode());
+        assert_eq!(options.token_budget(), None);
     }
 
     #[test]

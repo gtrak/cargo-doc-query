@@ -41,7 +41,7 @@ impl PathResolver {
 
     /// Check if a path matches the query
     /// Path is Vec<String> but query is &str (e.g., "Vec" or "std::vec::Vec")
-    fn path_matches(item_path: &[String], query_path: &str) -> bool {
+    pub fn path_matches(item_path: &[String], query_path: &str) -> bool {
         // Convert Vec<String> to a path string
         let path_str = item_path.join("::");
 

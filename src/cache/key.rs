@@ -50,6 +50,26 @@ impl CacheKeyInputs {
         })
     }
 
+    /// Get cargo.toml content
+    pub fn cargo_toml_content(&self) -> &[u8] {
+        &self.cargo_toml_content
+    }
+
+    /// Get rustc version
+    pub fn rustc_version(&self) -> &str {
+        &self.rustc_version
+    }
+
+    /// Get target triple
+    pub fn target_triple(&self) -> &str {
+        &self.target_triple
+    }
+
+    /// Get rustdoc_types version
+    pub fn rustdoc_types_version(&self) -> &str {
+        &self.rustdoc_types_version
+    }
+
     /// Generate deterministic cache key using BLAKE3
     pub fn generate_key(&self) -> String {
         let mut hasher = Hasher::new();

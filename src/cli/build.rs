@@ -464,10 +464,10 @@ mod tests {
     #[test]
     fn test_format_version_extraction_different_versions() {
         let versions = vec![
-            (1, "format_version\": 1"),
-            (10, "format_version\": 10"),
-            (57, "format_version\": 57"),
-            (100, "format_version\": 100"),
+            (1, "\"format_version\": 1"),
+            (10, "\"format_version\": 10"),
+            (57, "\"format_version\": 57"),
+            (100, "\"format_version\": 100"),
         ];
 
         for (expected, json_part) in versions {
@@ -497,9 +497,9 @@ mod tests {
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
         let pb = build_cmd.create_progress_bar(10, "test message");
 
-        assert_eq!(pb.length(), 10);
-        // Can't fully test the styling without visual output, but we can verify creation
-        assert!(pb.is_enabled());
+        // ProgressBar is created successfully and is a valid progress bar
+        assert_eq!(pb.length().unwrap(), 10);
+        assert_eq!(pb.message(), "test message");
     }
 
     #[test]
@@ -507,7 +507,8 @@ mod tests {
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
         let pb = build_cmd.create_spinner("test message");
 
-        assert!(pb.is_enabled());
+        // Spinner is created successfully and is a valid spinner
+        assert_eq!(pb.message(), "test message");
     }
 
     #[test]
@@ -519,10 +520,10 @@ mod tests {
         assert!(inputs.is_ok());
 
         let inputs = inputs.unwrap();
-        assert!(!inputs.cargo_toml_content.is_empty());
-        assert!(!inputs.rustc_version.is_empty());
-        assert!(!inputs.target_triple.is_empty());
-        assert!(!inputs.rustdoc_types_version.is_empty());
+        assert!(!inputs.cargo_toml_content().is_empty());
+        assert!(!inputs.rustc_version().is_empty());
+        assert!(!inputs.target_triple().is_empty());
+        assert!(!inputs.rustdoc_types_version().is_empty());
     }
 
     #[test]

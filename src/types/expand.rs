@@ -341,3 +341,272 @@ impl ModuleItemInfo {
         Self { name, kind, path }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type_node_creation() {
+        let node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        assert_eq!(node.id, "test::Type");
+        assert_eq!(node.kind, "struct");
+        assert_eq!(node.depth, 0);
+        assert!(node.fields.is_empty());
+        assert!(node.variants.is_empty());
+        assert!(node.items.is_empty());
+        assert!(node.generic_params.is_empty());
+    }
+
+    #[test]
+    fn test_type_node_with_field() {
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        let field = FieldInfo::new("x".to_string(), "i32".to_string(), false);
+        node.add_field(field);
+
+        assert_eq!(node.fields.len(), 1);
+        assert_eq!(node.fields[0].name, "x");
+        assert_eq!(node.fields[0].type_path, "i32");
+        assert_eq!(node.fields[0].is_optional, false);
+        assert!(node.fields[0].nested_type_id.is_none());
+    }
+
+    #[test]
+    fn test_type_node_with_variant() {
+        let mut node = TypeNode::new("test::Enum".to_string(), "enum".to_string(), 0);
+        let variant = VariantInfo::new("Variant1".to_string());
+        node.add_variant(variant);
+
+        assert_eq!(node.variants.len(), 1);
+        assert_eq!(node.variants[0].name, "Variant1");
+        assert!(node.variants[0].fields.is_empty());
+        assert!(node.variants[0].discriminant.is_none());
+    }
+
+    #[test]
+    fn test_type_node_with_generic_param() {
+        let mut node = TypeNode::new("test::Type".to_string(), "type".to_string(), 0);
+        node.add_generic_param("T = String".to_string());
+
+        assert_eq!(node.generic_params.len(), 1);
+        assert_eq!(node.generic_params[0], "T = String");
+    }
+
+    #[test]
+    fn test_type_node_add_item() {
+        let mut node = TypeNode::new("test::Module".to_string(), "module".to_string(), 0);
+        let item = ModuleItemInfo::new(
+            "Func".to_string(),
+            "function".to_string(),
+            "test::Func".to_string(),
+        );
+        node.add_item(item);
+
+        assert_eq!(node.items.len(), 1);
+        assert_eq!(node.items[0].name, "Func");
+        assert_eq!(node.items[0].kind, "function");
+    }
+
+    #[test]
+    fn test_type_node_estimate_tokens() {
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+        node.add_field(FieldInfo::new("y".to_string(), "f64".to_string(), true));
+
+        let tokens = node.estimate_tokens();
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_type_node_to_minimal() {
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+
+        let minimal = node.to_minimal();
+
+        assert_eq!(minimal.id, node.id);
+        assert_eq!(minimal.kind, node.kind);
+        assert_eq!(minimal.depth, node.depth);
+        assert_eq!(minimal.field_count, Some(1));
+        assert_eq!(minimal.variant_count, Some(0));
+        assert!(minimal.fields.is_empty());
+        assert!(minimal.generic_params.is_empty());
+    }
+
+    #[test]
+    fn test_type_graph_creation() {
+        let graph = TypeGraph::new("test".to_string(), 10);
+        assert_eq!(graph.root, "test");
+        assert_eq!(graph.depth_limit, 10);
+        assert!(graph.nodes.is_empty());
+        assert!(graph.cycles_detected.is_empty());
+    }
+
+    #[test]
+    fn test_type_graph_add_node() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        let node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        let node_id = graph.add_node(node);
+
+        assert_eq!(graph.nodes.len(), 1);
+        assert_eq!(graph.nodes[0].id, "test::Type");
+        assert_eq!(node_id, "test::Type");
+    }
+
+    #[test]
+    fn test_type_graph_estimate_tokens() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        graph.add_node(TypeNode::new(
+            "test::Type".to_string(),
+            "struct".to_string(),
+            0,
+        ));
+
+        let tokens = graph.estimate_tokens();
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_type_graph_to_minimal() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+        graph.add_node(node);
+
+        let minimal = graph.to_minimal();
+
+        assert_eq!(minimal.root, graph.root);
+        assert_eq!(minimal.depth_limit, graph.depth_limit);
+        assert_eq!(minimal.nodes.len(), 1);
+        assert!(minimal.nodes[0].fields.is_empty());
+    }
+
+    #[test]
+    fn test_expansion_result_creation() {
+        let graph = TypeGraph::new("test".to_string(), 10);
+        let result = ExpansionResult::new(graph);
+
+        assert_eq!(result.graph.root, "test");
+        assert_eq!(result.graph.nodes.len(), 0);
+        assert!(result.cycles_detected.is_empty());
+        assert_eq!(result.token_count, 10);
+        assert!(!result.budget_exceeded);
+        assert!(result.truncated_paths.is_empty());
+    }
+
+    #[test]
+    fn test_expansion_result_with_truncation() {
+        let graph = TypeGraph::new("test".to_string(), 10);
+        let mut result = ExpansionResult::new(graph);
+        result = result.with_truncation(vec!["path1".to_string(), "path2".to_string()]);
+
+        assert_eq!(result.truncated_paths.len(), 2);
+        assert!(result.budget_exceeded);
+    }
+
+    #[test]
+    fn test_expansion_result_update_token_count() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        graph.add_node(TypeNode::new(
+            "test::Type".to_string(),
+            "struct".to_string(),
+            0,
+        ));
+
+        let mut result = ExpansionResult::new(graph);
+        let initial_count = result.token_count;
+
+        result.update_token_count();
+        assert_eq!(result.token_count, initial_count);
+    }
+
+    #[test]
+    fn test_field_info_creation() {
+        let field = FieldInfo::new("x".to_string(), "i32".to_string(), false);
+        assert_eq!(field.name, "x");
+        assert_eq!(field.type_path, "i32");
+        assert_eq!(field.is_optional, false);
+        assert!(field.nested_type_id.is_none());
+    }
+
+    #[test]
+    fn test_field_info_with_nested_type() {
+        let field = FieldInfo::new("x".to_string(), "HashMap".to_string(), true)
+            .with_nested_type("HashMap".to_string());
+
+        assert_eq!(field.nested_type_id, Some("HashMap".to_string()));
+    }
+
+    #[test]
+    fn test_variant_info_creation() {
+        let variant = VariantInfo::new("Variant1".to_string());
+        assert_eq!(variant.name, "Variant1");
+        assert!(variant.fields.is_empty());
+        assert!(variant.discriminant.is_none());
+    }
+
+    #[test]
+    fn test_variant_info_with_discriminant() {
+        let variant = VariantInfo::new("Variant1".to_string()).with_discriminant("1".to_string());
+        assert_eq!(variant.discriminant, Some("1".to_string()));
+    }
+
+    #[test]
+    fn test_variant_info_add_field() {
+        let mut variant = VariantInfo::new("Variant1".to_string());
+        let field = FieldInfo::new("x".to_string(), "i32".to_string(), false);
+        variant.add_field(field);
+
+        assert_eq!(variant.fields.len(), 1);
+        assert_eq!(variant.fields[0].name, "x");
+    }
+
+    #[test]
+    fn test_module_item_info_creation() {
+        let item = ModuleItemInfo::new(
+            "Function".to_string(),
+            "function".to_string(),
+            "test::Function".to_string(),
+        );
+        assert_eq!(item.name, "Function");
+        assert_eq!(item.kind, "function");
+        assert_eq!(item.path, "test::Function");
+    }
+
+    #[test]
+    fn test_token_config_builder() {
+        let config = TokenConfig::new()
+            .with_budget(Some(100))
+            .with_minimal(true)
+            .with_threshold(0.5);
+
+        assert_eq!(config.budget, Some(100));
+        assert!(config.minimal_mode);
+        assert_eq!(config.warning_threshold, 0.5);
+    }
+
+    #[test]
+    fn test_token_config_chaining() {
+        let config = TokenConfig::default()
+            .with_budget(Some(200))
+            .with_minimal(false)
+            .with_threshold(0.7);
+
+        assert_eq!(config.budget, Some(200));
+        assert!(!config.minimal_mode);
+        assert_eq!(config.warning_threshold, 0.7);
+    }
+
+    #[test]
+    fn test_estimate_tokens_valid_json() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        graph.add_node(TypeNode::new(
+            "test::Type".to_string(),
+            "struct".to_string(),
+            0,
+        ));
+
+        let tokens = graph.estimate_tokens();
+        assert!(tokens > 0);
+    }
+}

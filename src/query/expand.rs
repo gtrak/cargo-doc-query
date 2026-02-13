@@ -463,8 +463,12 @@ impl TypeExpander {
             }
             Type::BorrowedRef { type_, .. } => self.format_type(type_),
             Type::ImplTrait(bounds) => {
-                let parts: Vec<String> = bounds.iter().map(|b| format!("{:?}", b)).collect();
-                format!("impl {}", parts.join(" + "))
+                if bounds.is_empty() {
+                    "impl <trait>".to_string()
+                } else {
+                    let parts: Vec<String> = bounds.iter().map(|b| format!("{:?}", b)).collect();
+                    format!("impl {}", parts.join(" + "))
+                }
             }
             Type::DynTrait(dyn_trait) => {
                 let mut parts = Vec::new();
@@ -515,4 +519,414 @@ pub fn expand_type_with_config(
 
     let mut expander = TypeExpander::with_config(index, depth, config);
     expander.expand(path, crate_filter)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustdoc_types::*;
+
+    #[test]
+    fn test_token_config_default() {
+        let config = TokenConfig::default();
+        assert_eq!(config.budget, None);
+        assert!(!config.minimal_mode);
+        assert_eq!(config.warning_threshold, 0.8);
+    }
+
+    #[test]
+    fn test_token_config_with_budget() {
+        let config = TokenConfig::new().with_budget(Some(1000));
+        assert_eq!(config.budget, Some(1000));
+    }
+
+    #[test]
+    fn test_token_config_minimal() {
+        let config = TokenConfig::new().with_minimal(true);
+        assert!(config.minimal_mode);
+    }
+
+    #[test]
+    fn test_token_config_threshold() {
+        let config = TokenConfig::new().with_threshold(0.5);
+        assert_eq!(config.warning_threshold, 0.5);
+    }
+
+    #[test]
+    fn test_would_exceed_budget_unlimited() {
+        let config = TokenConfig::default();
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+
+        assert!(!expander.would_exceed_budget(100));
+    }
+
+    #[test]
+    fn test_would_exceed_budget_with_budget() {
+        let config = TokenConfig::new().with_budget(Some(10));
+        let mut expander = TypeExpander::with_config(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+            config,
+        );
+
+        assert!(!expander.would_exceed_budget(5));
+        expander.add_tokens(5);
+        assert!(!expander.would_exceed_budget(5));
+        assert!(!expander.would_exceed_budget(1));
+    }
+
+    #[test]
+    fn test_would_exceed_budget_exceeds() {
+        let config = TokenConfig::new().with_budget(Some(10));
+        let mut expander = TypeExpander::with_config(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+            config,
+        );
+
+        expander.add_tokens(10);
+        assert!(expander.would_exceed_budget(1));
+    }
+
+    #[test]
+    fn test_is_approaching_budget() {
+        let config = TokenConfig::new().with_budget(Some(100));
+        let mut expander = TypeExpander::with_config(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+            config,
+        );
+
+        // At default threshold of 0.8 (80 tokens), should not be approaching
+        assert!(!expander.is_approaching_budget());
+
+        expander.add_tokens(80);
+        assert!(expander.is_approaching_budget());
+
+        expander.add_tokens(100);
+        assert!(expander.is_approaching_budget());
+    }
+
+    #[test]
+    fn test_is_approaching_budget_custom_threshold() {
+        let config = TokenConfig::new()
+            .with_budget(Some(100))
+            .with_threshold(0.5);
+        let mut expander = TypeExpander::with_config(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+            config,
+        );
+
+        // At 0.5 threshold (50 tokens), should approach at 50
+        assert!(!expander.is_approaching_budget());
+
+        expander.add_tokens(50);
+        assert!(expander.is_approaching_budget());
+    }
+
+    #[test]
+    fn test_format_type_resolved_path() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::ResolvedPath(Path {
+            path: "std::collections::HashMap".to_string(),
+            id: Id(1),
+            args: None,
+        });
+        assert_eq!(expander.format_type(&ty), "std::collections::HashMap");
+    }
+
+    #[test]
+    fn test_format_type_primitive() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Primitive("u32".to_string());
+        assert_eq!(expander.format_type(&ty), "u32");
+    }
+
+    #[test]
+    fn test_format_type_generic() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Generic("T".to_string());
+        assert_eq!(expander.format_type(&ty), "T");
+    }
+
+    #[test]
+    fn test_format_type_slice() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Slice(Box::new(Type::Generic("T".to_string())));
+        assert_eq!(expander.format_type(&ty), "[T]");
+    }
+
+    #[test]
+    fn test_format_type_array() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Array {
+            type_: Box::new(Type::Generic("T".to_string())),
+            len: "10".to_string(),
+        };
+        assert_eq!(expander.format_type(&ty), "[T; 10]");
+    }
+
+    #[test]
+    fn test_format_type_tuple() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Tuple(vec![
+            Type::Generic("A".to_string()),
+            Type::Generic("B".to_string()),
+        ]);
+        assert_eq!(expander.format_type(&ty), "(A, B)");
+    }
+
+    #[test]
+    fn test_format_type_raw_pointer() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::RawPointer {
+            is_mutable: true,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(expander.format_type(&ty), "*mut T");
+    }
+
+    #[test]
+    fn test_format_type_borrowed_ref() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::BorrowedRef {
+            lifetime: Some("'a".to_string()),
+            is_mutable: false,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(expander.format_type(&ty), "T");
+    }
+
+    #[test]
+    fn test_format_type_dyn_trait() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::DynTrait(DynTrait {
+            lifetime: None,
+            traits: vec![PolyTrait {
+                trait_: Path {
+                    path: "Display".to_string(),
+                    id: Id(1),
+                    args: None,
+                },
+                generic_params: vec![],
+            }],
+        });
+        assert_eq!(expander.format_type(&ty), "dyn Display");
+    }
+
+    #[test]
+    fn test_format_type_infer() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        let ty = Type::Infer;
+        assert_eq!(expander.format_type(&ty), "_");
+    }
+
+    #[test]
+    fn test_format_type_unknown() {
+        let expander = TypeExpander::new(
+            crate::cache::store::SerializableIndex {
+                format_version: 1,
+                cache_key: "test".to_string(),
+                nodes: vec![],
+                edges: vec![],
+            },
+            10,
+        );
+        // Unknown type variants should return "unknown"
+        let ty = Type::ImplTrait(vec![]);
+        assert_eq!(expander.format_type(&ty), "impl <trait>");
+    }
+
+    #[test]
+    fn test_path_resolver_find_by_path_empty_index() {
+        let krate = Crate {
+            root: Id(1),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+
+        let result = PathResolver::find_by_path(&krate, "nonexistent");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_path_resolver_find_by_path_exact_match() {
+        let mut krate = Crate {
+            root: Id(1),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+
+        krate.paths.insert(
+            Id(1),
+            ItemSummary {
+                crate_id: 1,
+                path: vec!["std".to_string()],
+                kind: ItemKind::Module,
+            },
+        );
+
+        krate.index.insert(
+            Id(1),
+            Item {
+                id: Id(1),
+                crate_id: 1,
+                name: Some("std".to_string()),
+                span: None,
+                visibility: Visibility::Public,
+                docs: None,
+                links: HashMap::new(),
+                attrs: vec![],
+                deprecation: None,
+                inner: ItemEnum::Module(Module {
+                    is_crate: true,
+                    items: vec![],
+                    is_stripped: false,
+                }),
+            },
+        );
+
+        let result = PathResolver::find_by_path(&krate, "std");
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_path_resolver_path_matches() {
+        let paths = vec!["std::collections".to_string(), "std::io".to_string()];
+        assert!(PathResolver::path_matches(&paths, "std::io"));
+        assert!(PathResolver::path_matches(&paths, "io"));
+        assert!(!PathResolver::path_matches(&paths, "other"));
+    }
+
+    #[test]
+    fn test_path_resolver_path_matches_suffix() {
+        let paths = vec!["std::collections::HashMap".to_string()];
+        assert!(PathResolver::path_matches(&paths, "HashMap"));
+        assert!(PathResolver::path_matches(&paths, "collections::HashMap"));
+    }
 }

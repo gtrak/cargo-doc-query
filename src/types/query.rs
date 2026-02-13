@@ -1,10 +1,10 @@
 // JSON output schema types for query responses
 
-use serde::ser::SerializeSeq;
 use serde::Serialize;
+use serde::ser::SerializeSeq;
 
 /// Top-level query response
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct QueryResponse {
     pub query: String,
     pub matches: Vec<QueryMatch>,
@@ -13,17 +13,17 @@ pub struct QueryResponse {
 }
 
 /// Individual match from a query
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct QueryMatch {
     pub crate_name: String,
     pub version: String,
     pub fully_qualified_path: String,
-    pub kind: String, // "type", "trait", "module", etc.
+    pub kind: String,
     pub content: QueryContent,
 }
 
 /// Content of a match - type, trait, or module result
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum QueryContent {
     Type(TypeResult),
@@ -32,7 +32,7 @@ pub enum QueryContent {
 }
 
 /// Result of a type query
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct TypeResult {
     pub kind: String, // "struct", "enum", "type alias", etc.
     pub methods: Vec<MethodOutput>,
@@ -40,7 +40,7 @@ pub struct TypeResult {
 }
 
 /// Result of a trait query
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct TraitResult {
     pub name: String,
     pub path: String,
@@ -51,7 +51,7 @@ pub struct TraitResult {
 }
 
 /// Result of a module query
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct ModuleResult {
     /// Module items (types, traits, functions, etc.)
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -62,7 +62,7 @@ pub struct ModuleResult {
 }
 
 /// Item within a module
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct ModuleItem {
     pub name: String,
     pub kind: String, // "struct", "enum", "trait", "function", "type", etc.
@@ -72,7 +72,7 @@ pub struct ModuleItem {
 }
 
 /// Method output for queries
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct MethodOutput {
     pub name: String,
     pub signature: String,
@@ -85,11 +85,6 @@ pub struct MethodOutput {
     pub is_trait_method: bool,
 }
 
-/// Helper function for skipping false values
-pub(crate) fn is_false(b: &bool) -> bool {
-    !b
-}
-
 /// Associated type output for trait queries
 #[derive(Serialize, Debug, Clone)]
 pub struct AssociatedTypeOutput {
@@ -100,8 +95,8 @@ pub struct AssociatedTypeOutput {
     pub default: Option<String>,
 }
 
-/// Trait implementation output
-#[derive(Serialize, Debug)]
+/// Trait implementation output for type queries
+#[derive(Serialize, Debug, Clone)]
 pub struct TraitImplOutput {
     pub trait_name: String,
     pub trait_path: String,
@@ -110,6 +105,11 @@ pub struct TraitImplOutput {
     pub provided_methods: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generic_args: Option<String>,
+}
+
+/// Helper function for skipping false values
+pub(crate) fn is_false(b: &bool) -> bool {
+    !b
 }
 
 impl QueryResponse {

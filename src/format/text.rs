@@ -331,3 +331,244 @@ fn format_type_node(node: &crate::types::expand::TypeNode, indent: usize) {
         println!("{}  <{}>", indent_str, node.generic_params.join(", "));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::expand::{
+        ExpansionResult, FieldInfo, ModuleItemInfo, TypeGraph, TypeNode, VariantInfo,
+    };
+    use crate::types::query::{
+        MethodOutput, ModuleResult, QueryContent, QueryMatch, QueryResponse, TraitImplOutput,
+        TraitResult, TypeResult,
+    };
+
+    #[test]
+    fn test_format_type_result_basic() {
+        let mut result = TypeResult::new("struct".to_string());
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::string::String".to_string(),
+            "struct".to_string(),
+            QueryContent::Type(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::string::String".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::string::String");
+    }
+
+    #[test]
+    fn test_format_type_result_with_methods() {
+        let mut result = TypeResult::new("struct".to_string());
+        let mut method = MethodOutput::new(
+            "new".to_string(),
+            "fn new()".to_string(),
+            "String".to_string(),
+            "public".to_string(),
+            true,
+        );
+        result.methods.push(method.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::string::String".to_string(),
+            "struct".to_string(),
+            QueryContent::Type(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::string::String".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::string::String");
+    }
+
+    #[test]
+    fn test_format_type_result_with_trait_impls() {
+        let mut result = TypeResult::new("struct".to_string());
+        let mut trait_impl =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        result.trait_implementations.push(trait_impl.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::string::String".to_string(),
+            "struct".to_string(),
+            QueryContent::Type(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::string::String".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::string::String");
+    }
+
+    #[test]
+    fn test_format_trait_result_with_associated_types() {
+        let mut result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string());
+        let mut assoc_type = crate::types::query::AssociatedTypeOutput::new("Item".to_string());
+        assoc_type.bounds = Some("T: Clone".to_string());
+        result.add_associated_type(assoc_type.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::clone::Clone".to_string(),
+            "trait".to_string(),
+            QueryContent::Trait(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::clone::Clone".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::clone::Clone");
+    }
+
+    #[test]
+    fn test_format_trait_result_with_methods() {
+        let mut result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string());
+        let mut method = MethodOutput::new(
+            "clone".to_string(),
+            "fn clone(&self) -> Self".to_string(),
+            "Self".to_string(),
+            "public".to_string(),
+            true,
+        );
+        result.add_method(method.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::clone::Clone".to_string(),
+            "trait".to_string(),
+            QueryContent::Trait(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::clone::Clone".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::clone::Clone");
+    }
+
+    #[test]
+    fn test_format_module_result() {
+        let mut result = crate::types::query::ModuleResult::new();
+        let mut item = crate::types::query::ModuleItem::new(
+            "Function".to_string(),
+            "function".to_string(),
+            "std::function::Function".to_string(),
+        );
+        result.items.push(item.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::function".to_string(),
+            "module".to_string(),
+            QueryContent::Module(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::function".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::function");
+    }
+
+    #[test]
+    fn test_format_module_result_with_re_exports() {
+        let mut result = crate::types::query::ModuleResult::new();
+        let mut item = crate::types::query::ModuleItem::new(
+            "HashMap".to_string(),
+            "re-export".to_string(),
+            "std::collections::HashMap".to_string(),
+        );
+        result.items.push(item.clone());
+
+        let mut match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::collections".to_string(),
+            "module".to_string(),
+            QueryContent::Module(result.clone()),
+        );
+        let mut response = QueryResponse::new("std::collections".to_string());
+        response.add_match(match_);
+        format_query_response(&response, "std::collections");
+    }
+
+    #[test]
+    fn test_format_expand_result_basic() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::Type".to_string(), 10));
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+        result.graph.add_node(node);
+
+        format_expand_result(&result, "test::Type");
+    }
+
+    #[test]
+    fn test_format_expand_result_with_budget_exceeded() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::Type".to_string(), 10));
+        result = result.with_truncation(vec!["path1".to_string(), "path2".to_string()]);
+
+        format_expand_result(&result, "test::Type");
+    }
+
+    #[test]
+    fn test_format_expand_result_with_nested_types() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::HashMap".to_string(), 10));
+
+        let mut node = TypeNode::new("test::HashMap".to_string(), "struct".to_string(), 0);
+        node.add_field(
+            FieldInfo::new("data".to_string(), "Vec<T>".to_string(), false)
+                .with_nested_type("Vec<T>".to_string()),
+        );
+        result.graph.add_node(node);
+
+        format_expand_result(&result, "test::HashMap");
+    }
+
+    #[test]
+    fn test_format_expand_result_with_variants() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::Option".to_string(), 10));
+
+        let mut node = TypeNode::new("test::Option".to_string(), "enum".to_string(), 0);
+        let mut variant = VariantInfo::new("Some".to_string());
+        variant.add_field(FieldInfo::new("value".to_string(), "T".to_string(), false));
+        node.add_variant(variant);
+        result.graph.add_node(node);
+
+        format_expand_result(&result, "test::Option");
+    }
+
+    #[test]
+    fn test_format_expand_result_with_generic_params() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::HashMap".to_string(), 10));
+
+        let mut node = TypeNode::new("test::HashMap".to_string(), "type".to_string(), 0);
+        node.add_generic_param("K: Eq".to_string());
+        node.add_generic_param("V: Hash".to_string());
+        result.graph.add_node(node);
+
+        format_expand_result(&result, "test::HashMap");
+    }
+
+    #[test]
+    fn test_format_expand_result_empty() {
+        let result = ExpansionResult::new(TypeGraph::new("test".to_string(), 10));
+
+        format_expand_result(&result, "test");
+    }
+
+    #[test]
+    fn test_format_expand_result_with_module_items() {
+        let mut result = ExpansionResult::new(TypeGraph::new("test::Module".to_string(), 10));
+
+        let mut node = TypeNode::new("test::Module".to_string(), "module".to_string(), 0);
+        node.add_item(ModuleItemInfo::new(
+            "Struct".to_string(),
+            "struct".to_string(),
+            "test::Struct".to_string(),
+        ));
+        node.add_item(ModuleItemInfo::new(
+            "Func".to_string(),
+            "function".to_string(),
+            "test::Func".to_string(),
+        ));
+        result.graph.add_node(node);
+
+        format_expand_result(&result, "test::Type");
+    }
+}

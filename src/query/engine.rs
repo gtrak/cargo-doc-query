@@ -64,6 +64,31 @@ impl QueryOptions {
         self.token_budget = budget;
         self
     }
+
+    /// Get query kind
+    pub fn kind(&self) -> &QueryKind {
+        &self.kind
+    }
+
+    /// Get include_docs flag
+    pub fn include_docs(&self) -> bool {
+        self.include_docs
+    }
+
+    /// Get include_private flag
+    pub fn include_private(&self) -> bool {
+        self.include_private
+    }
+
+    /// Get minimal_mode flag
+    pub fn minimal_mode(&self) -> bool {
+        self.minimal_mode
+    }
+
+    /// Get token_budget
+    pub fn token_budget(&self) -> Option<usize> {
+        self.token_budget
+    }
 }
 
 pub struct QueryEngine {
