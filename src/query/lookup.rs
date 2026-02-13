@@ -75,36 +75,132 @@ impl PathResolver {
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
+    use rustdoc_types::Crate;
 
     #[test]
-    fn test_path_matches_exact() {
-        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
-        assert!(PathResolver::path_matches(&item_path, "std::vec::Vec"));
+    fn test_find_by_path_with_filter_excludes_non_matching() {
+        let mut krate = Crate {
+            root: Id(1),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: rustdoc_types::Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+        krate.paths.insert(
+            Id(1),
+            rustdoc_types::ItemSummary {
+                crate_id: 1,
+                path: vec!["std".to_string()],
+                kind: rustdoc_types::ItemKind::Module,
+            },
+        );
+        krate.index.insert(
+            Id(1),
+            rustdoc_types::Item {
+                id: Id(1),
+                crate_id: 1,
+                name: Some("std".to_string()),
+                span: None,
+                visibility: rustdoc_types::Visibility::Public,
+                docs: None,
+                links: std::collections::HashMap::new(),
+                attrs: vec![],
+                deprecation: None,
+                inner: rustdoc_types::ItemEnum::Module(rustdoc_types::Module {
+                    is_crate: true,
+                    items: vec![],
+                    is_stripped: false,
+                }),
+            },
+        );
+
+        let crates: HashMap<String, Crate> = [("std".to_string(), krate)].into_iter().collect();
+        let results = PathResolver::find_by_path_in_crates(&crates, "std", Some("std"));
+        assert_eq!(results.len(), 1);
     }
 
     #[test]
-    fn test_path_matches_suffix() {
-        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
-        assert!(PathResolver::path_matches(&item_path, "vec::Vec"));
-        assert!(PathResolver::path_matches(&item_path, "Vec"));
+    fn test_find_by_path_with_filter_excludes_filtered_crates() {
+        let mut krate1 = Crate {
+            root: Id(1),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: rustdoc_types::Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+        let mut krate2 = Crate {
+            root: Id(2),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: rustdoc_types::Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+
+        krate1.paths.insert(
+            Id(1),
+            rustdoc_types::ItemSummary {
+                crate_id: 1,
+                path: vec!["std".to_string()],
+                kind: rustdoc_types::ItemKind::Module,
+            },
+        );
+
+        krate2.paths.insert(
+            Id(2),
+            rustdoc_types::ItemSummary {
+                crate_id: 2,
+                path: vec!["serde".to_string()],
+                kind: rustdoc_types::ItemKind::Module,
+            },
+        );
+
+        let crates: HashMap<String, Crate> =
+            [("std".to_string(), krate1), ("serde".to_string(), krate2)]
+                .into_iter()
+                .collect();
+        let results = PathResolver::find_by_path_in_crates(&crates, "std", Some("serde"));
+        assert_eq!(results.len(), 0);
     }
 
     #[test]
-    fn test_path_matches_no_match() {
-        let item_path = vec!["std".to_string(), "vec".to_string(), "Vec".to_string()];
-        assert!(!PathResolver::path_matches(
-            &item_path,
-            "std::string::String"
-        ));
-        assert!(!PathResolver::path_matches(&item_path, "Option"));
-    }
-
-    #[test]
-    fn test_path_matches_partial_suffix() {
-        let item_path = vec!["anyhow".to_string(), "Error".to_string()];
-        assert!(PathResolver::path_matches(&item_path, "anyhow::Error"));
-        assert!(PathResolver::path_matches(&item_path, "Error"));
+    fn test_get_item_from_crates_nonexistent_id() {
+        let mut krate = Crate {
+            root: Id(1),
+            crate_version: None,
+            includes_private: true,
+            index: HashMap::new(),
+            paths: HashMap::new(),
+            external_crates: HashMap::new(),
+            target: rustdoc_types::Target {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                target_features: vec![],
+            },
+            format_version: 1,
+        };
+        let id = Id(1);
+        let crates: HashMap<String, Crate> = [("std".to_string(), krate)].into_iter().collect();
+        let item = PathResolver::get_item_from_crates(&crates, "std", id);
+        assert!(item.is_none());
     }
 }

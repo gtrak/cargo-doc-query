@@ -1,0 +1,23 @@
+# Proptest configuration for property-based tests
+# These values control the test case generation for proptest tests
+
+# General iteration settings
+iter_min = 100
+iter_max = 1000
+
+# Shrinking settings
+shrink_min_iter = 10
+shrink_max_iter = 100
+
+# String length limits
+string_min_len = 1
+string_max_len = 100
+
+# Number of items in collections
+vec_min_len = 0
+vec_max_len = 10
+map_min_len = 0
+map_max_len = 5
+
+# Depth limits for nested structures
+max_depth = 5

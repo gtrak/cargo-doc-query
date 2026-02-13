@@ -1,12 +1,19 @@
+---
+name: cargo-doc-query
+description: Tool for querying 3rd-party library Rust documentation using cargo-doc-query
+license: MIT
+compatibility: opencode
+---
+
 # Cargo Doc Query Skill
 
-Tool for querying Rust documentation using cargo-doc-query.
+Tool for querying 3rd-party library Rust documentation using cargo-doc-query.
 
 ## Usage
 
 This skill allows the agent to query Rust crate documentation to understand APIs, types, and modules during development.
 
-**Important:** This is the development version. Use the temporary entrypoint:
+
 ```
 cargo-doc-query <command> [args]
 ```

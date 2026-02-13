@@ -125,6 +125,337 @@ impl QueryCommand {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_query_command_creation() {
+        let query_cmd = QueryCommand::new(
+            "std::vec::Vec".to_string(),
+            None,
+            vec!["docs".to_string()],
+            QueryKindArg::All,
+            false,
+            None,
+            false,
+        );
+
+        assert_eq!(query_cmd.path, "std::vec::Vec");
+        assert!(query_cmd.include.contains(&"docs".to_string()));
+        assert_eq!(query_cmd.kind, QueryKindArg::All);
+        assert!(!query_cmd.minimal);
+        assert_eq!(query_cmd.tokens, None);
+        assert!(!query_cmd.json);
+    }
+
+    #[test]
+    fn test_query_command_with_crate_name() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            Some("std".to_string()),
+            vec![],
+            QueryKindArg::All,
+            false,
+            None,
+            false,
+        );
+
+        assert_eq!(query_cmd.crate_name, Some("std".to_string()));
+    }
+
+    #[test]
+    fn test_query_command_with_json_output() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            false,
+            None,
+            true,
+        );
+
+        assert!(query_cmd.json);
+    }
+
+    #[test]
+    fn test_query_command_with_minimal_mode() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            true,
+            None,
+            false,
+        );
+
+        assert!(query_cmd.minimal);
+    }
+
+    #[test]
+    fn test_query_command_with_token_budget() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            false,
+            Some(500),
+            false,
+        );
+
+        assert_eq!(query_cmd.tokens, Some(500));
+    }
+
+    #[test]
+    fn test_query_kind_from_str_valid() {
+        let tests = vec![
+            ("methods", QueryKindArg::Methods),
+            ("traits", QueryKindArg::Traits),
+            ("types", QueryKindArg::Types),
+            ("all", QueryKindArg::All),
+            ("METHODS", QueryKindArg::Methods),
+            ("Methods", QueryKindArg::Methods),
+        ];
+
+        for (input, expected) in tests {
+            let result = QueryKindArg::from_str(input).unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_query_kind_from_str_invalid() {
+        let invalid = vec!["invalid", "foo", "methods_and_traits"];
+
+        for input in invalid {
+            let result = QueryKindArg::from_str(input);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_query_kind_display() {
+        let tests = vec![
+            (QueryKindArg::Methods, "methods"),
+            (QueryKindArg::Traits, "traits"),
+            (QueryKindArg::Types, "types"),
+            (QueryKindArg::All, "all"),
+        ];
+
+        for (kind, expected) in tests {
+            let display = kind.to_string();
+            assert_eq!(display, expected);
+        }
+    }
+
+    #[test]
+    fn test_query_kind_equality() {
+        assert_eq!(QueryKindArg::Methods, QueryKindArg::Methods);
+        assert_ne!(QueryKindArg::Methods, QueryKindArg::Traits);
+        assert_ne!(QueryKindArg::All, QueryKindArg::Types);
+    }
+
+    #[test]
+    fn test_parse_options_with_docs() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec!["docs".to_string()],
+            QueryKindArg::All,
+            false,
+            None,
+            false,
+        );
+
+        let options = query_cmd.parse_options();
+        assert!(options.include_docs);
+    }
+
+    #[test]
+    fn test_parse_options_with_private() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec!["private".to_string()],
+            QueryKindArg::All,
+            false,
+            None,
+            false,
+        );
+
+        let options = query_cmd.parse_options();
+        assert!(options.include_private);
+    }
+
+    #[test]
+    fn test_parse_options_with_minimal() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            true,
+            None,
+            false,
+        );
+
+        let options = query_cmd.parse_options();
+        assert!(options.minimal);
+    }
+
+    #[test]
+    fn test_parse_options_with_token_budget() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            false,
+            Some(500),
+            false,
+        );
+
+        let options = query_cmd.parse_options();
+        assert_eq!(options.token_budget, Some(500));
+    }
+
+    #[test]
+    fn test_parse_options_default_values() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            false,
+            None,
+            false,
+        );
+
+        let options = query_cmd.parse_options();
+        assert_eq!(options.kind, QueryKind::All);
+        assert!(!options.include_docs);
+        assert!(!options.include_private);
+        assert!(!options.minimal);
+        assert_eq!(options.token_budget, None);
+    }
+
+    #[test]
+    fn test_token_budget_validation_minimum() {
+        let query_cmd = QueryCommand::new(
+            "Vec".to_string(),
+            None,
+            vec![],
+            QueryKindArg::All,
+            false,
+            Some(50),
+            false,
+        );
+
+        assert!(query_cmd.tokens.is_some_and(|t| t < 100));
+    }
+
+    #[test]
+    fn test_token_budget_validation_multiple() {
+        let budgets = vec![100, 150, 500, 1000];
+
+        for budget in budgets {
+            let query_cmd = QueryCommand::new(
+                "Vec".to_string(),
+                None,
+                vec![],
+                QueryKindArg::All,
+                false,
+                Some(budget),
+                false,
+            );
+
+            assert_eq!(query_cmd.tokens, Some(budget));
+            assert!(budget >= 100);
+        }
+    }
+
+    #[test]
+    fn test_query_command_path_variations() {
+        let paths = vec![
+            "std::vec::Vec",
+            "Vec",
+            "anyhow::Error",
+            "serde_json::Value",
+            "some::module::Type",
+        ];
+
+        for path in paths {
+            let query_cmd = QueryCommand::new(
+                path.to_string(),
+                None,
+                vec![],
+                QueryKindArg::All,
+                false,
+                None,
+                false,
+            );
+            assert_eq!(query_cmd.path, path);
+        }
+    }
+
+    #[test]
+    fn test_include_options_combinations() {
+        let combinations = vec![
+            vec!["docs".to_string()],
+            vec!["private".to_string()],
+            vec!["docs", "private"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            vec![],
+            vec!["trait_parameterization".to_string()],
+        ];
+
+        for combination in combinations {
+            let query_cmd = QueryCommand::new(
+                "Vec".to_string(),
+                None,
+                combination.clone(),
+                QueryKindArg::All,
+                false,
+                None,
+                false,
+            );
+
+            assert_eq!(query_cmd.include, combination);
+        }
+    }
+
+    #[test]
+    fn test_query_command_with_all_query_kinds() {
+        let query_kinds = vec![
+            QueryKindArg::Methods,
+            QueryKindArg::Traits,
+            QueryKindArg::Types,
+            QueryKindArg::All,
+        ];
+
+        for kind in query_kinds {
+            let query_cmd = QueryCommand::new(
+                "Vec".to_string(),
+                None,
+                vec![],
+                kind.clone(),
+                false,
+                None,
+                false,
+            );
+
+            assert_eq!(query_cmd.kind, kind);
+        }
+    }
+}
+
 impl Command for QueryCommand {
     fn execute(&self) -> Result<()> {
         // Validate token budget

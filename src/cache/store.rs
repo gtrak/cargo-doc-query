@@ -113,3 +113,214 @@ impl CacheStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_cache_store_new_creates_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to temp directory to avoid conflicts
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+        let cache_store = CacheStore::new().unwrap();
+
+        // Verify directory was created
+        assert!(PathBuf::from("target/doc-query").exists());
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_cache_save_and_load() {
+        let cache_store = CacheStore::new().unwrap();
+        let cache_key = "test-key";
+
+        let test_index = SerializableIndex {
+            format_version: 1,
+            cache_key: cache_key.to_string(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        let saved_path = cache_store.save(cache_key, &test_index).unwrap();
+        assert!(saved_path.exists());
+
+        let loaded = cache_store.load(cache_key).unwrap().unwrap();
+        assert_eq!(loaded.cache_key, cache_key);
+        assert_eq!(loaded.format_version, 1);
+        assert_eq!(loaded.nodes.len(), 0);
+        assert_eq!(loaded.edges.len(), 0);
+    }
+
+    #[test]
+    fn test_cache_load_nonexistent_key() {
+        let cache_store = CacheStore::new().unwrap();
+        let nonexistent_key = "nonexistent-key-12345";
+
+        let loaded = cache_store.load(nonexistent_key).unwrap();
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn test_cache_load_current_empty_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to temp directory
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+        let cache_store = CacheStore::new().unwrap();
+
+        let loaded = cache_store.load_current().unwrap();
+        assert!(loaded.is_none());
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_cache_load_current_multiple_files() {
+        let cache_store = CacheStore::new().unwrap();
+        let key1 = "test-key-1";
+        let key2 = "test-key-2";
+
+        let test_index = SerializableIndex {
+            format_version: 1,
+            cache_key: key1.to_string(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        let test_index2 = SerializableIndex {
+            format_version: 1,
+            cache_key: key2.to_string(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        // Save key2 first to ensure it's older (different modification time)
+        cache_store.save(key2, &test_index2).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // Then save key1
+        cache_store.save(key1, &test_index).unwrap();
+
+        let loaded = cache_store.load_current().unwrap().unwrap();
+        assert_eq!(loaded.cache_key, key1);
+    }
+
+    #[test]
+    fn test_cache_save_overwrites_existing() {
+        let cache_store = CacheStore::new().unwrap();
+        let cache_key = "overwrite-test";
+
+        let test_index1 = SerializableIndex {
+            format_version: 1,
+            cache_key: cache_key.to_string(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        let test_index2 = SerializableIndex {
+            format_version: 2,
+            cache_key: cache_key.to_string(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        cache_store.save(cache_key, &test_index1).unwrap();
+
+        let loaded_before = cache_store.load(cache_key).unwrap().unwrap();
+        assert_eq!(loaded_before.format_version, 1);
+
+        // Ensure the directory still exists before saving
+        if !cache_store.cache_dir.exists() {
+            std::fs::create_dir_all(&cache_store.cache_dir).unwrap();
+        }
+
+        cache_store.save(cache_key, &test_index2).unwrap();
+
+        let loaded_after = cache_store.load(cache_key).unwrap().unwrap();
+        assert_eq!(loaded_after.format_version, 2);
+    }
+
+    #[test]
+    fn test_serializable_index_roundtrip() {
+        let original = SerializableIndex {
+            format_version: 1,
+            cache_key: "test-key".to_string(),
+            nodes: vec![
+                SerializableCrateNode {
+                    name: "crate1".to_string(),
+                    version: "1.0.0".to_string(),
+                    json_path: "/path/to/crate1.json".to_string(),
+                },
+                SerializableCrateNode {
+                    name: "crate2".to_string(),
+                    version: "2.0.0".to_string(),
+                    json_path: "/path/to/crate2.json".to_string(),
+                },
+            ],
+            edges: vec![(0, 1, "normal".to_string()), (1, 0, "dev".to_string())],
+        };
+
+        let data = to_stdvec(&original).unwrap();
+
+        let loaded: SerializableIndex = from_bytes(&data).unwrap();
+
+        assert_eq!(loaded.format_version, original.format_version);
+        assert_eq!(loaded.cache_key, original.cache_key);
+        assert_eq!(loaded.nodes.len(), original.nodes.len());
+        assert_eq!(loaded.edges.len(), original.edges.len());
+
+        // Compare edge weights
+        assert_eq!(loaded.edges.len(), original.edges.len());
+        for (i, (from, to, edge_type)) in loaded.edges.iter().enumerate() {
+            assert_eq!(*from, original.edges[i].0);
+            assert_eq!(*to, original.edges[i].1);
+            assert_eq!(edge_type, &original.edges[i].2);
+        }
+    }
+
+    #[test]
+    fn test_clear_stdlib_nonexistent_directory() {
+        let cache_store = CacheStore::new().unwrap();
+        // Should not error if stdlib directory doesn't exist
+        let result = cache_store.clear_stdlib();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_serializable_crate_node_fields() {
+        let node = SerializableCrateNode {
+            name: "test-crate".to_string(),
+            version: "1.0.0".to_string(),
+            json_path: "/path/to/crate.json".to_string(),
+        };
+
+        assert_eq!(node.name, "test-crate");
+        assert_eq!(node.version, "1.0.0");
+        assert_eq!(node.json_path, "/path/to/crate.json");
+    }
+
+    #[test]
+    fn test_serializable_index_empty() {
+        let index = SerializableIndex {
+            format_version: 0,
+            cache_key: String::new(),
+            nodes: vec![],
+            edges: vec![],
+        };
+
+        let data = to_stdvec(&index).unwrap();
+        let loaded: SerializableIndex = from_bytes(&data).unwrap();
+
+        assert_eq!(loaded.nodes.len(), 0);
+        assert_eq!(loaded.edges.len(), 0);
+        assert_eq!(loaded.format_version, 0);
+    }
+}

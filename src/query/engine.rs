@@ -467,3 +467,85 @@ impl QueryEngine {
         Ok(method)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustdoc_types::{FunctionHeader, ItemEnum, Type};
+
+    #[test]
+    fn test_query_options_default() {
+        let options = QueryOptions::new(QueryKind::All);
+        assert_eq!(options.kind, QueryKind::All);
+        assert!(!options.include_docs);
+        assert!(!options.include_private);
+        assert!(!options.minimal_mode);
+        assert_eq!(options.token_budget, None);
+    }
+
+    #[test]
+    fn test_query_options_with_docs() {
+        let options = QueryOptions::new(QueryKind::All).with_docs(true);
+        assert!(options.include_docs);
+    }
+
+    #[test]
+    fn test_query_options_with_private() {
+        let options = QueryOptions::new(QueryKind::All).with_private(true);
+        assert!(options.include_private);
+    }
+
+    #[test]
+    fn test_query_options_with_minimal() {
+        let options = QueryOptions::new(QueryKind::All).with_minimal(true);
+        assert!(options.minimal_mode);
+    }
+
+    #[test]
+    fn test_trait_impl_output_new() {
+        let impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        assert_eq!(impl_output.trait_name, "Display");
+        assert_eq!(impl_output.trait_path, "std::fmt::Display");
+        assert!(impl_output.methods.is_empty());
+    }
+
+    #[test]
+    fn test_trait_impl_output_add_method() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self)".to_string(),
+            "()".to_string(),
+            "public".to_string(),
+            true,
+        ));
+        assert_eq!(impl_output.methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_impl_output_add_provided_method() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_provided_method("to_string".to_string());
+        assert_eq!(impl_output.provided_methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_impl_output_to_minimal() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self)".to_string(),
+            "()".to_string(),
+            "public".to_string(),
+            true,
+        ));
+        let minimal = impl_output.to_minimal();
+        assert_eq!(minimal.trait_name, impl_output.trait_name);
+        assert_eq!(minimal.methods.len(), impl_output.methods.len());
+        assert_eq!(minimal.provided_methods.len(), 0);
+    }
+}

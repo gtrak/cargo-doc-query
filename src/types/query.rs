@@ -421,3 +421,424 @@ impl TraitImplOutput {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_query_response_creation() {
+        let response = QueryResponse::new("std::vec::Vec".to_string());
+        assert_eq!(response.query, "std::vec::Vec");
+        assert_eq!(response.matches.len(), 0);
+        assert_eq!(response.errors.len(), 0);
+    }
+
+    #[test]
+    fn test_query_response_add_match() {
+        let mut response = QueryResponse::new("test".to_string());
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Module(ModuleResult::new()),
+        );
+        response.add_match(match_);
+        assert_eq!(response.matches.len(), 1);
+    }
+
+    #[test]
+    fn test_query_response_add_error() {
+        let mut response = QueryResponse::new("test".to_string());
+        response.add_error("test error".to_string());
+        assert_eq!(response.errors.len(), 1);
+        assert_eq!(response.errors[0], "test error");
+    }
+
+    #[test]
+    fn test_query_response_estimate_tokens() {
+        let mut response = QueryResponse::new("test".to_string());
+        response.add_match(QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Module(ModuleResult::new()),
+        ));
+        let tokens = response.estimate_tokens();
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_query_response_to_minimal() {
+        let mut response = QueryResponse::new("test".to_string());
+        response.add_match(QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Module(ModuleResult::new()),
+        ));
+
+        let minimal = response.to_minimal();
+        assert_eq!(minimal.query, response.query);
+        assert_eq!(minimal.matches.len(), response.matches.len());
+    }
+
+    #[test]
+    fn test_query_match_creation() {
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Module(ModuleResult::new()),
+        );
+        assert_eq!(match_.crate_name, "std");
+        assert_eq!(match_.version, "1.0.0");
+        assert_eq!(match_.fully_qualified_path, "std::Vec");
+        assert_eq!(match_.kind, "type");
+    }
+
+    #[test]
+    fn test_query_match_to_minimal() {
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Module(ModuleResult::new()),
+        );
+
+        let minimal = match_.to_minimal();
+        assert_eq!(minimal.crate_name, match_.crate_name);
+        assert_eq!(minimal.version, match_.version);
+    }
+
+    #[test]
+    fn test_type_result_creation() {
+        let result = TypeResult::new("struct".to_string());
+        assert_eq!(result.kind, "struct");
+        assert_eq!(result.methods.len(), 0);
+        assert_eq!(result.trait_implementations.len(), 0);
+    }
+
+    #[test]
+    fn test_type_result_add_method() {
+        let mut result = TypeResult::new("type".to_string());
+        result.add_method(MethodOutput::new(
+            "new".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+        assert_eq!(result.methods.len(), 1);
+    }
+
+    #[test]
+    fn test_type_result_add_trait_impl() {
+        let mut result = TypeResult::new("type".to_string());
+        result.add_trait_impl(TraitImplOutput::new(
+            "Display".to_string(),
+            "std::fmt::Display".to_string(),
+        ));
+        assert_eq!(result.trait_implementations.len(), 1);
+    }
+
+    #[test]
+    fn test_type_result_to_minimal() {
+        let mut result = TypeResult::new("struct".to_string());
+        result.add_method(MethodOutput::new(
+            "new".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+
+        let minimal = result.to_minimal();
+        assert_eq!(minimal.kind, result.kind);
+        assert_eq!(minimal.methods.len(), result.methods.len());
+    }
+
+    #[test]
+    fn test_trait_result_creation() {
+        let result = TraitResult::new("Display".to_string(), "std::fmt::Display".to_string());
+        assert_eq!(result.name, "Display");
+        assert_eq!(result.path, "std::fmt::Display");
+        assert_eq!(result.methods.len(), 0);
+        assert_eq!(result.associated_types.len(), 0);
+        assert_eq!(result.provided_methods.len(), 0);
+    }
+
+    #[test]
+    fn test_trait_result_add_method() {
+        let mut result = TraitResult::new("Display".to_string(), "std::fmt::Display".to_string());
+        result.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self) -> std::fmt::Result".to_string(),
+            "Result".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+        assert_eq!(result.methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_result_add_associated_type() {
+        let mut result = TraitResult::new("Display".to_string(), "std::fmt::Display".to_string());
+        result.add_associated_type(AssociatedTypeOutput::new("Output".to_string()));
+        assert_eq!(result.associated_types.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_result_add_provided_method() {
+        let mut result = TraitResult::new("Display".to_string(), "std::fmt::Display".to_string());
+        result.add_provided_method("to_string".to_string());
+        assert_eq!(result.provided_methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_result_to_minimal() {
+        let mut result = TraitResult::new("Display".to_string(), "std::fmt::Display".to_string());
+        result.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self) -> std::fmt::Result".to_string(),
+            "Result".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+
+        let minimal = result.to_minimal();
+        assert_eq!(minimal.name, result.name);
+        assert_eq!(minimal.methods.len(), result.methods.len());
+        assert_eq!(minimal.provided_methods.len(), 0); // Should be empty in minimal
+    }
+
+    #[test]
+    fn test_module_result_creation() {
+        let result = ModuleResult::new();
+        assert_eq!(result.items.len(), 0);
+        assert_eq!(result.submodules.len(), 0);
+    }
+
+    #[test]
+    fn test_module_result_add_item() {
+        let mut result = ModuleResult::new();
+        let item = ModuleItem::new(
+            "function1".to_string(),
+            "function".to_string(),
+            "path1".to_string(),
+        );
+        result.add_item(item);
+        assert_eq!(result.items.len(), 1);
+    }
+
+    #[test]
+    fn test_module_result_add_submodule() {
+        let mut result = ModuleResult::new();
+        result.add_submodule("std".to_string());
+        assert_eq!(result.submodules.len(), 1);
+    }
+
+    #[test]
+    fn test_module_result_to_minimal() {
+        let mut result = ModuleResult::new();
+        result.add_item(ModuleItem::new(
+            "test".to_string(),
+            "type".to_string(),
+            "path".to_string(),
+        ));
+
+        let minimal = result.to_minimal();
+        assert_eq!(minimal.items.len(), result.items.len());
+        assert_eq!(minimal.submodules.len(), result.submodules.len());
+    }
+
+    #[test]
+    fn test_module_item_creation() {
+        let item = ModuleItem::new(
+            "Function".to_string(),
+            "function".to_string(),
+            "path::to::function".to_string(),
+        );
+        assert_eq!(item.name, "Function");
+        assert_eq!(item.kind, "function");
+        assert_eq!(item.path, "path::to::function");
+        assert!(item.signature.is_none());
+    }
+
+    #[test]
+    fn test_module_item_with_signature() {
+        let item = ModuleItem::new(
+            "Function".to_string(),
+            "function".to_string(),
+            "path".to_string(),
+        )
+        .with_signature("fn(x: i32) -> i32".to_string());
+        assert_eq!(item.signature, Some("fn(x: i32) -> i32".to_string()));
+    }
+
+    #[test]
+    fn test_module_item_to_minimal() {
+        let item = ModuleItem::new(
+            "Function".to_string(),
+            "function".to_string(),
+            "path".to_string(),
+        )
+        .with_signature("fn(x: i32) -> i32".to_string());
+
+        let minimal = item.to_minimal();
+        assert_eq!(minimal.name, item.name);
+        assert_eq!(minimal.kind, item.kind);
+        assert_eq!(minimal.path, item.path);
+        assert!(minimal.signature.is_none()); // Should be None in minimal
+    }
+
+    #[test]
+    fn test_method_output_creation() {
+        let method = MethodOutput::new(
+            "new".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        );
+        assert_eq!(method.name, "new");
+        assert_eq!(method.signature, "fn()");
+        assert_eq!(method.return_type, "()");
+        assert_eq!(method.visibility, "pub");
+        assert!(method.is_public);
+        assert!(method.docs.is_none());
+        assert!(!method.is_trait_method);
+    }
+
+    #[test]
+    fn test_method_output_with_docs() {
+        let method = MethodOutput::new(
+            "new".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_docs(Some("Creates a new instance".to_string()));
+
+        assert_eq!(method.docs, Some("Creates a new instance".to_string()));
+    }
+
+    #[test]
+    fn test_method_output_with_trait_flag() {
+        let method = MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self)".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_is_trait_method(true);
+
+        assert!(method.is_trait_method);
+    }
+
+    #[test]
+    fn test_method_output_to_minimal() {
+        let method = MethodOutput::new(
+            "new".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_docs(Some("Docs".to_string()))
+        .with_is_trait_method(true);
+
+        let minimal = method.to_minimal();
+        assert_eq!(minimal.name, method.name);
+        assert_eq!(minimal.docs, None); // Should be None in minimal
+        assert!(minimal.is_trait_method);
+    }
+
+    #[test]
+    fn test_associated_type_output_creation() {
+        let assoc_type = AssociatedTypeOutput::new("Output".to_string());
+        assert_eq!(assoc_type.name, "Output");
+        assert!(assoc_type.bounds.is_none());
+        assert!(assoc_type.default.is_none());
+    }
+
+    #[test]
+    fn test_associated_type_with_bounds() {
+        let assoc_type = AssociatedTypeOutput::new("Output".to_string())
+            .with_bounds(Some("T: Clone".to_string()));
+        assert_eq!(assoc_type.bounds, Some("T: Clone".to_string()));
+    }
+
+    #[test]
+    fn test_associated_type_with_default() {
+        let assoc_type =
+            AssociatedTypeOutput::new("Output".to_string()).with_default(Some("None".to_string()));
+        assert_eq!(assoc_type.default, Some("None".to_string()));
+    }
+
+    #[test]
+    fn test_trait_impl_output_creation() {
+        let impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        assert_eq!(impl_output.trait_name, "Display");
+        assert_eq!(impl_output.trait_path, "std::fmt::Display");
+        assert_eq!(impl_output.methods.len(), 0);
+        assert_eq!(impl_output.provided_methods.len(), 0);
+        assert!(impl_output.generic_args.is_none());
+    }
+
+    #[test]
+    fn test_trait_impl_output_add_method() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self)".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+        assert_eq!(impl_output.methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_impl_output_add_provided_method() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_provided_method("to_string".to_string());
+        assert_eq!(impl_output.provided_methods.len(), 1);
+    }
+
+    #[test]
+    fn test_trait_impl_output_with_generic_args() {
+        let impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string())
+                .with_generic_args(Some("T".to_string()));
+        assert_eq!(impl_output.generic_args, Some("T".to_string()));
+    }
+
+    #[test]
+    fn test_trait_impl_output_to_minimal() {
+        let mut impl_output =
+            TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
+        impl_output.add_method(MethodOutput::new(
+            "fmt".to_string(),
+            "fn(&self)".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        ));
+
+        let minimal = impl_output.to_minimal();
+        assert_eq!(minimal.trait_name, impl_output.trait_name);
+        assert_eq!(minimal.methods.len(), impl_output.methods.len());
+        assert_eq!(minimal.provided_methods.len(), 0); // Should be empty in minimal
+    }
+}

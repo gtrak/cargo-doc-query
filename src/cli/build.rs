@@ -342,6 +342,271 @@ impl BuildCommand {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use tempfile::{tempdir, TempDir};
+
+    #[test]
+    fn test_build_command_creation() {
+        let manifest_path = PathBuf::from("Cargo.toml");
+        let build_cmd = BuildCommand::new(manifest_path.clone(), true);
+
+        assert_eq!(build_cmd.manifest_path, manifest_path);
+        assert!(build_cmd.all_features);
+    }
+
+    #[test]
+    fn test_build_command_creation_without_features() {
+        let manifest_path = PathBuf::from("Cargo.toml");
+        let build_cmd = BuildCommand::new(manifest_path.clone(), false);
+
+        assert_eq!(build_cmd.manifest_path, manifest_path);
+        assert!(!build_cmd.all_features);
+    }
+
+    #[test]
+    fn test_serializable_index_generation() {
+        let json_paths = vec![
+            (
+                "crate1".to_string(),
+                "1.0.0".to_string(),
+                PathBuf::from("/tmp/crate1.json"),
+            ),
+            (
+                "crate2".to_string(),
+                "2.0.0".to_string(),
+                PathBuf::from("/tmp/crate2.json"),
+            ),
+        ];
+
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let serializable = build_cmd.generate_serializable_index(&[], &json_paths);
+
+        assert_eq!(serializable.format_version, 1);
+        assert_eq!(serializable.nodes.len(), 2);
+        assert_eq!(serializable.nodes[0].name, "crate1");
+        assert_eq!(serializable.nodes[0].version, "1.0.0");
+        assert_eq!(serializable.nodes[1].name, "crate2");
+        assert_eq!(serializable.nodes[1].version, "2.0.0");
+        assert_eq!(serializable.edges.len(), 0);
+    }
+
+    #[test]
+    fn test_serializable_index_generation_with_absolute_paths() {
+        let json_paths = vec![
+            (
+                "crate1".to_string(),
+                "1.0.0".to_string(),
+                PathBuf::from("/absolute/path/crate1.json"),
+            ),
+            (
+                "crate2".to_string(),
+                "2.0.0".to_string(),
+                PathBuf::from("/another/path/crate2.json"),
+            ),
+        ];
+
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let serializable = build_cmd.generate_serializable_index(&[], &json_paths);
+
+        assert_eq!(serializable.nodes.len(), 2);
+        assert!(serializable.nodes[0].json_path.starts_with("/absolute"));
+        assert!(serializable.nodes[1].json_path.starts_with("/another"));
+    }
+
+    #[test]
+    fn test_format_version_extraction_valid_json() {
+        let json_content = r#"{
+            "format_version": 57,
+            "crate": "std",
+            "items": {}
+        }"#;
+
+        let result = BuildCommand::extract_format_version(json_content).unwrap();
+        assert_eq!(result, 57);
+    }
+
+    #[test]
+    fn test_format_version_extraction_missing() {
+        let json_content = r#"{
+            "crate": "std",
+            "items": {}
+        }"#;
+
+        let result = BuildCommand::extract_format_version(json_content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_version_extraction_invalid_number() {
+        let json_content = r#"{
+            "format_version": "invalid",
+            "crate": "std"
+        }"#;
+
+        let result = BuildCommand::extract_format_version(json_content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_version_extraction_with_whitespace() {
+        let json_content = r#"{
+            "format_version" : 57 ,
+            "crate": "std"
+        }"#;
+
+        let result = BuildCommand::extract_format_version(json_content).unwrap();
+        assert_eq!(result, 57);
+    }
+
+    #[test]
+    fn test_format_version_extraction_different_versions() {
+        let versions = vec![
+            (1, "format_version\": 1"),
+            (10, "format_version\": 10"),
+            (57, "format_version\": 57"),
+            (100, "format_version\": 100"),
+        ];
+
+        for (expected, json_part) in versions {
+            let json_content = format!(r#"{{{}, "crate": "std" }}"#, json_part);
+            let result = BuildCommand::extract_format_version(&json_content).unwrap();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_package_name_to_json_name_conversion() {
+        let tests = vec![
+            ("serde", "serde"),
+            ("serde_json", "serde_json"),
+            ("some-crate", "some_crate"),
+            ("another-package-name", "another_package_name"),
+        ];
+
+        for (package_name, expected) in tests {
+            let json_name = package_name.replace("-", "_");
+            assert_eq!(json_name, expected);
+        }
+    }
+
+    #[test]
+    fn test_progress_bar_creation() {
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let pb = build_cmd.create_progress_bar(10, "test message");
+
+        assert_eq!(pb.length(), 10);
+        // Can't fully test the styling without visual output, but we can verify creation
+        assert!(pb.is_enabled());
+    }
+
+    #[test]
+    fn test_spinner_creation() {
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let pb = build_cmd.create_spinner("test message");
+
+        assert!(pb.is_enabled());
+    }
+
+    #[test]
+    fn test_cache_key_inputs_from_project() {
+        let manifest_path = Path::new("Cargo.toml");
+        let inputs = CacheKeyInputs::from_project(manifest_path);
+
+        // Should succeed even if file doesn't exist (uses defaults)
+        assert!(inputs.is_ok());
+
+        let inputs = inputs.unwrap();
+        assert!(!inputs.cargo_toml_content.is_empty());
+        assert!(!inputs.rustc_version.is_empty());
+        assert!(!inputs.target_triple.is_empty());
+        assert!(!inputs.rustdoc_types_version.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_crate_names_with_hyphens() {
+        let tests = vec![
+            ("serde", "serde"),
+            ("serde-json", "serde_json"),
+            ("some-pkg-name", "some_pkg_name"),
+            ("rustdoc-types", "rustdoc_types"),
+        ];
+
+        for (package_name, expected) in tests {
+            let converted = package_name.replace("-", "_");
+            assert_eq!(converted, expected);
+        }
+    }
+
+    #[test]
+    fn test_stdlib_package_list() {
+        let stdlib_packages = [
+            ("std", "0.0.0", "std/Cargo.toml"),
+            ("core", "0.0.0", "core/Cargo.toml"),
+            ("alloc", "0.0.0", "alloc/Cargo.toml"),
+            ("proc_macro", "0.0.0", "proc_macro/Cargo.toml"),
+        ];
+
+        assert_eq!(stdlib_packages.len(), 4);
+
+        for (name, version, _) in &stdlib_packages {
+            assert!(!name.is_empty());
+            assert!(!version.is_empty());
+            assert!(!name.contains('/'));
+        }
+    }
+
+    #[test]
+    fn test_cache_key_format() {
+        let manifest_path = Path::new("Cargo.toml");
+        let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
+
+        let key = inputs.generate_key();
+
+        // Should be a non-empty string
+        assert!(!key.is_empty());
+
+        // Should be 64 characters for BLAKE3 hash
+        assert_eq!(key.len(), 64);
+
+        // Should only contain hex characters
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_build_command_with_various_paths() {
+        let paths = vec![
+            PathBuf::from("/absolute/path/to/Cargo.toml"),
+            PathBuf::from("../relative/Cargo.toml"),
+            PathBuf::from("./local/Cargo.toml"),
+            PathBuf::from("Cargo.toml"),
+        ];
+
+        for path in paths {
+            let cmd = BuildCommand::new(path.clone(), false);
+            assert_eq!(cmd.manifest_path, path);
+        }
+    }
+
+    #[test]
+    fn test_json_name_normalization_preserves_ascii() {
+        let tests = vec![
+            ("serde", "serde"),
+            ("serde_json", "serde_json"),
+            ("rustdoc_types", "rustdoc_types"),
+            ("anyhow", "anyhow"),
+            ("clap", "clap"),
+        ];
+
+        for (package_name, expected) in tests {
+            let normalized = package_name.replace("-", "_");
+            assert_eq!(normalized, expected);
+        }
+    }
+}
+
 impl Command for BuildCommand {
     fn execute(&self) -> Result<()> {
         eprintln!("{}", style("Building documentation index...").bold().cyan());

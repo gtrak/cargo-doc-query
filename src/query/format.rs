@@ -105,11 +105,11 @@ impl TypeFormatter {
             .sig
             .inputs
             .iter()
-            .map(|(_name, ty)| format_type(ty))
+            .map(|(_name, ty)| Self::format_type(ty))
             .collect();
 
         let return_str = match &func_ptr.sig.output {
-            Some(ty) => format!(" -> {}", format_type(ty)),
+            Some(ty) => format!(" -> {}", Self::format_type(ty)),
             None => String::new(),
         };
 
@@ -180,7 +180,323 @@ impl TypeFormatter {
     }
 }
 
-// Helper function to format types (used internally)
-fn format_type(ty: &Type) -> String {
-    TypeFormatter::format_type(ty)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustdoc_types::Id;
+
+    #[test]
+    fn test_format_type_resolved_path() {
+        let ty = Type::ResolvedPath(rustdoc_types::Path {
+            path: "HashMap".to_string(),
+            id: Id(123),
+            args: None,
+        });
+        assert_eq!(TypeFormatter::format_type(&ty), "HashMap");
+    }
+
+    #[test]
+    fn test_format_type_generic() {
+        let ty = Type::Generic("T".to_string());
+        assert_eq!(TypeFormatter::format_type(&ty), "T");
+    }
+
+    #[test]
+    fn test_format_type_primitive() {
+        let ty = Type::Primitive("u32".to_string());
+        assert_eq!(TypeFormatter::format_type(&ty), "u32");
+    }
+
+    #[test]
+    fn test_format_type_unit() {
+        let ty = Type::Tuple(vec![]);
+        assert_eq!(TypeFormatter::format_type(&ty), "()");
+    }
+
+    #[test]
+    fn test_format_type_single_item_tuple() {
+        let ty = Type::Tuple(vec![Type::Generic("T".to_string())]);
+        assert_eq!(TypeFormatter::format_type(&ty), "(T,)");
+    }
+
+    #[test]
+    fn test_format_type_multi_item_tuple() {
+        let ty = Type::Tuple(vec![
+            Type::Generic("T".to_string()),
+            Type::Generic("U".to_string()),
+        ]);
+        assert_eq!(TypeFormatter::format_type(&ty), "(T, U)");
+    }
+
+    #[test]
+    fn test_format_type_array() {
+        let ty = Type::Array {
+            type_: Box::new(Type::Generic("T".to_string())),
+            len: "10".to_string(),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "[T; 10]");
+    }
+
+    #[test]
+    fn test_format_type_slice() {
+        let ty = Type::Slice(Box::new(Type::Generic("T".to_string())));
+        assert_eq!(TypeFormatter::format_type(&ty), "[T]");
+    }
+
+    #[test]
+    fn test_format_type_ref_immutable() {
+        let ty = Type::BorrowedRef {
+            lifetime: None,
+            is_mutable: false,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "&T");
+    }
+
+    #[test]
+    fn test_format_type_ref_mutable() {
+        let ty = Type::BorrowedRef {
+            lifetime: None,
+            is_mutable: true,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "&mut T");
+    }
+
+    #[test]
+    fn test_format_type_ref_with_lifetime() {
+        let ty = Type::BorrowedRef {
+            lifetime: Some("'a".to_string()),
+            is_mutable: false,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "&'a T");
+    }
+
+    #[test]
+    fn test_format_type_raw_const_pointer() {
+        let ty = Type::RawPointer {
+            is_mutable: false,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "*const T");
+    }
+
+    #[test]
+    fn test_format_type_raw_mut_pointer() {
+        let ty = Type::RawPointer {
+            is_mutable: true,
+            type_: Box::new(Type::Generic("T".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_type(&ty), "*mut T");
+    }
+
+    #[test]
+    fn test_format_type_infer() {
+        let ty = Type::Infer;
+        assert_eq!(TypeFormatter::format_type(&ty), "_");
+    }
+
+    #[test]
+    fn test_format_signature_no_args_no_return() {
+        let sig = FunctionSignature {
+            is_c_variadic: false,
+            inputs: vec![],
+            output: None,
+        };
+        assert_eq!(TypeFormatter::format_signature(&sig), "fn()");
+    }
+
+    #[test]
+    fn test_format_signature_with_args() {
+        let sig = FunctionSignature {
+            is_c_variadic: false,
+            inputs: vec![
+                ("x".to_string(), Type::Generic("x".to_string())),
+                ("y".to_string(), Type::Generic("y".to_string())),
+            ],
+            output: None,
+        };
+        assert_eq!(TypeFormatter::format_signature(&sig), "fn(x, y)");
+    }
+
+    #[test]
+    fn test_format_signature_with_return() {
+        let sig = FunctionSignature {
+            is_c_variadic: false,
+            inputs: vec![],
+            output: Some(Type::Generic("Result".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_signature(&sig), "fn() -> Result");
+    }
+
+    #[test]
+    fn test_format_signature_with_args_and_return() {
+        let sig = FunctionSignature {
+            is_c_variadic: false,
+            inputs: vec![("x".to_string(), Type::Generic("x".to_string()))],
+            output: Some(Type::Generic("u32".to_string())),
+        };
+        assert_eq!(TypeFormatter::format_signature(&sig), "fn(x) -> u32");
+    }
+
+    #[test]
+    fn test_format_function_pointer() {
+        let func_ptr = FunctionPointer {
+            sig: FunctionSignature {
+                is_c_variadic: false,
+                inputs: vec![],
+                output: None,
+            },
+            generic_params: vec![],
+            header: rustdoc_types::FunctionHeader {
+                is_const: false,
+                is_unsafe: false,
+                is_async: false,
+                abi: rustdoc_types::Abi::Rust,
+            },
+        };
+        assert!(TypeFormatter::format_function_pointer(&func_ptr).contains("fn()"));
+    }
+
+    #[test]
+    fn test_format_function_pointer_with_generics() {
+        let func_ptr = FunctionPointer {
+            sig: FunctionSignature {
+                is_c_variadic: false,
+                inputs: vec![],
+                output: None,
+            },
+            generic_params: vec![GenericParamDef {
+                name: "T".to_string(),
+                kind: rustdoc_types::GenericParamDefKind::Type {
+                    bounds: vec![],
+                    default: None,
+                    is_synthetic: false,
+                },
+            }],
+            header: rustdoc_types::FunctionHeader {
+                is_const: false,
+                is_unsafe: false,
+                is_async: false,
+                abi: rustdoc_types::Abi::Rust,
+            },
+        };
+        let result = TypeFormatter::format_function_pointer(&func_ptr);
+        assert!(result.contains("<T>"));
+    }
+
+    #[test]
+    fn test_format_abi_rust() {
+        let abi = rustdoc_types::Abi::Rust;
+        assert_eq!(TypeFormatter::format_abi(&abi), "unknown");
+    }
+
+    #[test]
+    fn test_format_abi_c() {
+        let abi = rustdoc_types::Abi::C { unwind: false };
+        assert_eq!(TypeFormatter::format_abi(&abi), "C");
+    }
+
+    #[test]
+    fn test_format_abi_stdcall() {
+        let abi = rustdoc_types::Abi::Stdcall { unwind: false };
+        assert_eq!(TypeFormatter::format_abi(&abi), "stdcall");
+    }
+
+    #[test]
+    fn test_format_abi_fastcall() {
+        let abi = rustdoc_types::Abi::Fastcall { unwind: false };
+        assert_eq!(TypeFormatter::format_abi(&abi), "fastcall");
+    }
+
+    #[test]
+    fn test_format_generic_params_empty() {
+        let params: Vec<GenericParamDef> = vec![];
+        assert_eq!(TypeFormatter::format_generic_params(&params), "");
+    }
+
+    #[test]
+    fn test_format_generic_params_single() {
+        let params = vec![GenericParamDef {
+            name: "T".to_string(),
+            kind: rustdoc_types::GenericParamDefKind::Type {
+                bounds: vec![],
+                default: None,
+                is_synthetic: false,
+            },
+        }];
+        assert_eq!(TypeFormatter::format_generic_params(&params), "T");
+    }
+
+    #[test]
+    fn test_format_generic_params_multiple() {
+        let params = vec![
+            GenericParamDef {
+                name: "T".to_string(),
+                kind: rustdoc_types::GenericParamDefKind::Type {
+                    bounds: vec![],
+                    default: None,
+                    is_synthetic: false,
+                },
+            },
+            GenericParamDef {
+                name: "U".to_string(),
+                kind: rustdoc_types::GenericParamDefKind::Type {
+                    bounds: vec![],
+                    default: None,
+                    is_synthetic: false,
+                },
+            },
+            GenericParamDef {
+                name: "V".to_string(),
+                kind: rustdoc_types::GenericParamDefKind::Type {
+                    bounds: vec![],
+                    default: None,
+                    is_synthetic: false,
+                },
+            },
+        ];
+        assert_eq!(TypeFormatter::format_generic_params(&params), "T, U, V");
+    }
+
+    #[test]
+    fn test_format_return_type_none() {
+        assert_eq!(TypeFormatter::format_return_type(&None), "()");
+    }
+
+    #[test]
+    fn test_format_return_type_some() {
+        let ty = Type::ResolvedPath(rustdoc_types::Path {
+            path: "String".to_string(),
+            id: Id(123),
+            args: None,
+        });
+        assert_eq!(TypeFormatter::format_return_type(&Some(ty)), "String");
+    }
+
+    #[test]
+    fn test_format_dyn_trait_with_traits() {
+        let ty = Type::DynTrait(rustdoc_types::DynTrait {
+            lifetime: None,
+            traits: vec![rustdoc_types::PolyTrait {
+                trait_: rustdoc_types::Path {
+                    path: "Display".to_string(),
+                    id: Id(1),
+                    args: None,
+                },
+                generic_params: vec![],
+            }],
+        });
+        assert!(TypeFormatter::format_type(&ty).contains("Display"));
+    }
+
+    #[test]
+    fn test_format_nested_type_tuple_in_tuple() {
+        let ty = Type::Tuple(vec![
+            Type::Tuple(vec![Type::Generic("A".to_string())]),
+            Type::Tuple(vec![Type::Generic("B".to_string())]),
+        ]);
+        assert_eq!(TypeFormatter::format_type(&ty), "((A,), (B,))");
+    }
 }
