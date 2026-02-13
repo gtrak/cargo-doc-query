@@ -5,6 +5,7 @@ use clap::Parser;
 use std::time::Instant;
 
 use crate::cli::Command;
+use crate::format::text::{format_expand_result_with_formatter, format_with_item_formatter};
 use crate::types::detail::DetailLevel;
 use crate::types::expand::TokenConfig;
 use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
@@ -413,8 +414,8 @@ impl ExpandCommand {
                 .context("Failed to serialize expansion as JSON")?;
             println!("{}", json_output);
         } else {
-            // Output human-readable text
-            crate::format::text::format_expand_result(&expansion, &self.path);
+            // Output human-readable text using unified formatter
+            format_expand_result_with_formatter(&expansion, &self.path, detail_level, self.tokens);
         }
 
         Ok(())
