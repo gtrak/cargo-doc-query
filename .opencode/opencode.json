@@ -7,5 +7,12 @@
         "external_directory": {
             "/home/gary/dev/opencode_rs/.opencode/get-shit-done/*": "allow"
         }
-    }
+    },
+    "skills": [
+        {
+            "name": "cargo-doc-query",
+            "file": ".opencode/skills/cargo-doc-query.md",
+            "description": "Query Rust crate documentation to understand APIs, types, and modules"
+        }
+    ]
 }
