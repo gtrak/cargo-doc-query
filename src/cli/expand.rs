@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use crate::cli::Command;
 use crate::types::expand::TokenConfig;
-use crate::types::filter::FilterConfig;
+use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
 
 #[derive(Parser, Debug)]
 pub struct ExpandCommand {
@@ -254,6 +254,11 @@ impl Command for ExpandCommand {
             );
         }
 
+        // Apply filters if configured
+        if let Some(filtered_result) = self.apply_filters(expansion) {
+            expansion = filtered_result;
+        }
+
         // Output based on format preference
         if self.json {
             // Output JSON
@@ -266,5 +271,52 @@ impl Command for ExpandCommand {
         }
 
         Ok(())
+    }
+
+    /// Apply filters to expansion results
+    fn apply_filters(
+        &self,
+        mut expansion: crate::types::expand::ExpansionResult,
+    ) -> Option<crate::types::expand::ExpansionResult> {
+        // Get filter configuration from CLI args
+        let config = self.filter_config();
+
+        // Only apply filters if any are configured
+        if !config.has_filters() {
+            return None;
+        }
+
+        // Compile filter engine
+        let engine = match FilterEngine::compile(&config) {
+            Ok(e) => e,
+            Err(FilterError::InvalidGlob { pattern, message }) => {
+                eprintln!("Error: Invalid glob pattern '{}': {}", pattern, message);
+                eprintln!("  Run `cargo doc-query query --help-filters` for syntax help.");
+                return None;
+            }
+            Err(FilterError::EmptyPattern) => {
+                eprintln!("Error: Empty pattern provided to filter.");
+                eprintln!("  Check your filter arguments for empty strings.");
+                return None;
+            }
+            Err(e) => {
+                eprintln!("Error: Failed to compile filters: {}", e);
+                return None;
+            }
+        };
+
+        // Filter the type graph nodes
+        let (filtered_nodes, stats) = engine.filter_with_stats(&expansion.graph.nodes);
+
+        // Update expansion with filtered nodes
+        expansion.graph.nodes = filtered_nodes.into_iter().map(|node| *node).collect();
+
+        // Display stats if not in quiet mode
+        if !self.quiet {
+            println!();
+            println!("{}", stats.summary());
+        }
+
+        Some(expansion)
     }
 }
