@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 7 — CLI Integration
-**Plan:** 1 of 1 in current phase
+**Plan:** 2 of 3 in current phase
 **Status:** Plan complete
-**Last activity:** 2026-02-13 — Completed 07-01-SUMMARY.md
+**Last activity:** 2026-02-13 — Completed 07-02-SUMMARY.md
 
-Progress: ████████████████████████████████████░ 95%
+Progress: ██████████████████████████████████████░ 100% (Phase 7) | 21/25 (84%)
 
 ---
 
@@ -44,7 +44,7 @@ Progress: ███████████████████████�
 | Phase | Status | Requirements | Key Deliverable |
 |-------|--------|--------------|-----------------|
 | 6. Foundation | ✅ Complete | 2/2 | FilterEngine with glob matching, validation, stats |
-| 7. CLI Integration | ✅ Complete | 1/1 | Filter flags wired to CLI |
+| 7. CLI Integration | 🔄 In Progress | 2/3 | FilterEngine wired to CLI (expand command complete) |
 | 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
 | 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
 | 10. Integration | ○ Pending | 0 | End-to-end validation |
@@ -92,6 +92,14 @@ Completed plan 07-01 for CLI integration:
 - Created filter_config() method with --only precedence logic
 - All CLI filter flags ready for use in query execution
 
+Completed plan 07-02 for expand command filter integration:
+- Added crate_name and visibility fields to TypeNode
+- Implemented Filterable trait for TypeNode
+- Integrated FilterEngine into ExpandCommand::execute()
+- Applied filters to expansion results with statistics display
+- Verified zero overhead when no filters configured
+- All tests passing (212 tests)
+
 v1.1 start with focus shift:
 - Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
 - Prioritizing rendering consistency and output refinement
@@ -122,7 +130,7 @@ v1.1 start with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
-| Plans completed | 21/25 (84%) | 25 total |
+| Plans completed | 22/25 (88%) | 25 total |
 | Milestones complete | 1/1 | 1 in progress |
 
 ---
