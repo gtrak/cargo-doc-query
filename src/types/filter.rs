@@ -38,8 +38,8 @@
 
 use crate::types::query::{QueryContent, QueryMatch};
 use glob::Pattern;
-use thiserror::Error;
 use std::time::Instant;
+use thiserror::Error;
 
 /// Configuration for filtering query results
 ///
@@ -416,6 +416,25 @@ impl Filterable for QueryMatch {
                 .unwrap_or("pub"),
             QueryContent::Module(_) => "pub",
         }
+    }
+}
+
+#[cfg(feature = "expand")]
+impl Filterable for crate::types::expand::TypeNode {
+    fn filter_path(&self) -> &str {
+        &self.id
+    }
+
+    fn filter_kind(&self) -> &str {
+        &self.kind
+    }
+
+    fn filter_crate(&self) -> &str {
+        &self.crate_name
+    }
+
+    fn filter_visibility(&self) -> &str {
+        &self.visibility
     }
 }
 
