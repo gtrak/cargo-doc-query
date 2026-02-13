@@ -11,7 +11,6 @@ mod types;
 use clap::{Parser, Subcommand};
 use cli::build::BuildCommand;
 use cli::expand::ExpandCommand;
-use cli::query::QueryCommand;
 use cli::Command;
 use error::errors::AppError;
 use std::process::ExitCode;
@@ -121,21 +120,6 @@ enum Commands {
         #[arg(long, value_name = "CRATE")]
         crate_name: Option<String>,
 
-        /// What to include in output
-        #[arg(
-            long,
-            value_parser = clap::builder::PossibleValuesParser::new([
-                "docs",
-                "private",
-                "trait_parameterization",
-            ])
-        )]
-        include: Vec<String>,
-
-        /// Which kind of query (methods, traits, types, all)
-        #[arg(long, default_value = "all")]
-        kind: String,
-
         /// Output minimal representation (signatures only, no docs)
         #[arg(long)]
         minimal: bool,
@@ -203,19 +187,10 @@ fn run(cli: Cli) -> Result<(), AppError> {
             path,
             depth,
             crate_name,
-            include: _,
-            kind,
             minimal,
             tokens,
             json,
         } => {
-            let _kind = match kind.to_lowercase().as_str() {
-                "methods" => cli::query::QueryKindArg::Methods,
-                "traits" => cli::query::QueryKindArg::Traits,
-                "types" => cli::query::QueryKindArg::Types,
-                _ => cli::query::QueryKindArg::All,
-            };
-
             // Always use expand (unified rendering)
             // Default depth is 1 to show submodules, depth=0 shows just the type
             let depth = if *depth == 0 { 1 } else { *depth };

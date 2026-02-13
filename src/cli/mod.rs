@@ -1,6 +1,5 @@
 pub mod build;
 pub mod expand;
-pub mod query;
 
 use anyhow::Result;
 
