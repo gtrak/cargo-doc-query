@@ -71,11 +71,18 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 22:15 UTC
-**Stopped at:** Completed 09-05-SUMMARY.md
-**Resume file:** .planning/phases/09-unified-rendering/09-05-SUMMARY.md
+**Last session:** 2026-02-13 22:20 UTC
+**Stopped at:** Fixed format_expand_result_with_formatter to properly use ItemFormatter
+**Resume file:** .planning/phases/09-unified-rendering/09-VERIFICATION.md
 
 ### Recent Context
+
+Gap closure execution completed 09-04 and 09-05:
+- 09-04: Wired DocHandler into ItemFormatter for doc truncation
+- 09-05: Wired unified formatter into CLI expand command
+- Verifier found format_expand_result_with_formatter used old renderer
+- Fixed: Now properly converts TypeNode to FormattedItem and uses BudgetTracker
+- All 308 tests pass, 5/7 must-haves verified
 
 Completed plan 09-05 for CLI integration:
 - Added import for format_expand_result_with_formatter and format_with_item_formatter
