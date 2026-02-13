@@ -1,8 +1,11 @@
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
+use console::style;
+use indicatif::{ProgressBar, ProgressStyle};
 use rustdoc_json::Builder;
 use std::panic;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::cache::key::CacheKeyInputs;
 use crate::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
@@ -21,6 +24,35 @@ impl BuildCommand {
             manifest_path,
             all_features,
         }
+    }
+
+    /// Create a progress bar with a nice style
+    fn create_progress_bar(&self, len: u64, msg: &str) -> ProgressBar {
+        let pb = ProgressBar::new(len);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        pb.set_message(msg.to_string());
+        pb.enable_steady_tick(Duration::from_millis(100));
+        pb
+    }
+
+    /// Create a spinner for indeterminate progress
+    fn create_spinner(&self, msg: &str) -> ProgressBar {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        pb.set_message(msg.to_string());
+        pb.enable_steady_tick(Duration::from_millis(100));
+        pb
     }
 
     fn find_cached_json(&self, package_name: &str, package_version: &str) -> Option<PathBuf> {
@@ -111,20 +143,12 @@ impl BuildCommand {
         let mut paths = Vec::new();
         let mut need_generation = Vec::new();
 
-        println!(
-            "Checking for cached rustdoc JSON for {} external dependency(s)...",
-            deps.len()
-        );
+        // Progress bar for checking cache
+        let cache_pb = self.create_progress_bar(deps.len() as u64, "Checking cache");
 
         // First, try to find cached JSON files
         for (package_name, package_version, manifest_path) in deps {
             if let Some(cached_path) = self.find_cached_json(package_name, package_version) {
-                println!(
-                    "✓ Found cached rustdoc JSON for {} v{}: {}",
-                    package_name,
-                    package_version,
-                    cached_path.display()
-                );
                 paths.push((package_name.clone(), package_version.clone(), cached_path));
             } else {
                 need_generation.push((
@@ -133,17 +157,20 @@ impl BuildCommand {
                     manifest_path.clone(),
                 ));
             }
+            cache_pb.inc(1);
         }
+        cache_pb.finish_with_message(format!(
+            "{} cached, {} need generation",
+            paths.len(),
+            need_generation.len()
+        ));
 
         // Generate JSON for crates that don't have cached versions
         if !need_generation.is_empty() {
-            println!(
-                "\nGenerating rustdoc JSON for {} crate(s) without cache...",
-                need_generation.len()
-            );
+            let gen_pb = self.create_progress_bar(need_generation.len() as u64, "Generating docs");
 
             for (package_name, package_version, manifest_path) in need_generation {
-                println!("Processing {} v{}...", package_name, package_version);
+                gen_pb.set_message(format!("Generating {} v{}", package_name, package_version));
 
                 // Use rustdoc-json with package-local manifest to document external dependencies
                 let builder = Builder::default()
@@ -159,23 +186,18 @@ impl BuildCommand {
                 // Wrap build in catch_unwind for graceful error handling
                 match panic::catch_unwind(|| builder.build()) {
                     Ok(Ok(path)) => {
-                        println!("✓ Successfully generated: {}", path.display());
                         paths.push((package_name, package_version, path));
                     }
-                    Ok(Err(e)) => {
-                        eprintln!(
-                            "⚠ Failed for {} v{}: {} (continuing)",
-                            package_name, package_version, e
-                        );
+                    Ok(Err(_e)) => {
+                        // Silently continue on error
                     }
                     Err(_) => {
-                        eprintln!(
-                            "⚠ Panic for {} v{} (continuing)",
-                            package_name, package_version
-                        );
+                        // Silently continue on panic
                     }
                 }
+                gen_pb.inc(1);
             }
+            gen_pb.finish_with_message(format!("Generated {} docs", paths.len()));
         }
 
         if paths.is_empty() {
@@ -183,11 +205,6 @@ impl BuildCommand {
                 "Failed to generate rustdoc JSON for any package"
             ));
         }
-
-        println!(
-            "Successfully generated rustdoc JSON for {} crate(s)",
-            paths.len()
-        );
 
         Ok(paths)
     }
@@ -327,39 +344,48 @@ impl BuildCommand {
 
 impl Command for BuildCommand {
     fn execute(&self) -> Result<()> {
-        println!("Discovering dependencies...");
+        eprintln!("{}", style("Building documentation index...").bold().cyan());
 
         // 1. Get workspace dependencies (BUILD-02 fix)
+        let deps_spinner = self.create_spinner("Discovering dependencies...");
         let deps = crate::cargo::dependencies::get_workspace_dependencies(&self.manifest_path)
             .context("Failed to get workspace dependencies")?;
-        println!("Found {} external dependencies", deps.len());
+        deps_spinner.finish_with_message(format!("Found {} external dependencies", deps.len()));
 
         // 2. Generate cache key from project inputs (CACHE-01)
+        let key_spinner = self.create_spinner("Computing cache key...");
         let cache_inputs = CacheKeyInputs::from_project(&self.manifest_path)
             .context("Failed to create cache key")?;
         let cache_key = cache_inputs.generate_key();
-        println!("Cache key: {}", &cache_key[..16]);
+        key_spinner.finish_with_message(format!("Cache key: {}...", &cache_key[..16]));
 
         // 3. Try to load from cache (CACHE-02)
         let cache_store = CacheStore::new().context("Failed to initialize cache store")?;
 
         if let Some(index) = cache_store.load(&cache_key)? {
-            println!("Using cached index ({} crates)", index.nodes.len());
+            eprintln!(
+                "{}",
+                style(format!(
+                    "✓ Using cached index ({} crates)",
+                    index.nodes.len()
+                ))
+                .green()
+            );
             return Ok(());
         }
 
-        println!("No valid cache found, building index...");
+        eprintln!("{}", style("Cache miss, building index...").yellow());
 
         // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
         let json_paths = self.generate_rustdoc_json(&deps)?;
 
-        println!("Generated rustdoc JSON");
-
         // 5. Parse and validate all JSON files
         let mut graph = CrateGraph::new();
+        let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
+
         let json_paths_refs: Vec<_> = json_paths.iter().collect();
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
-            println!("Processing {} v{}...", pkg_name, pkg_version);
+            process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
 
             let json_str = std::fs::read_to_string(json_path)
                 .with_context(|| format!("Failed to read {}", json_path.display()))?;
@@ -375,17 +401,16 @@ impl Command for BuildCommand {
                 json_path: json_path.clone(),
             };
             graph.add_crate(node);
+            process_pb.inc(1);
         }
-
-        println!("Successfully indexed {} crates", graph.crate_count());
+        process_pb.finish_with_message(format!("Indexed {} crates", graph.crate_count()));
 
         // 8. Save to cache (CACHE-03)
+        let save_spinner = self.create_spinner("Saving cache...");
         let mut serializable = self.generate_serializable_index(&deps, &json_paths);
         serializable.cache_key = cache_key.clone();
         cache_store.save(&cache_key, &serializable)?;
-        println!("Index cached successfully");
-
-        println!("Build complete!");
+        save_spinner.finish_with_message("Cache saved");
 
         Ok(())
     }
