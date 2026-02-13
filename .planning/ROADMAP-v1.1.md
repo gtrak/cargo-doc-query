@@ -127,6 +127,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 | FIELD-05 | Function modifiers displayed: const, unsafe, async, ABI info |
 | FIELD-06 | New fields omitted in minimal mode for token efficiency |
 | FIELD-07 | JSON output includes all new fields with backward-compatible schema |
+| FIELD-08 | `--detailed` flag provides expanded metadata per node (orthogonal to depth) |
 
 ### Success Criteria (Observable Behaviors)
 
@@ -137,6 +138,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 5. **User sees function modifiers:** Functions show `const`, `unsafe`, `async`, or ABI info (e.g., `extern "C"`)
 6. **Minimal mode omits new fields:** Using `--minimal` suppresses visibility, deprecation, and other new fields for token efficiency
 7. **JSON output is backward compatible:** Existing scripts parsing JSON output continue to work; new fields use `#[serde(skip_serializing_if = "Option::is_none")]`
+8. **User can request detailed metadata:** Using `--detailed` shows all metadata fields regardless of depth level
 
 ### Dependencies
 
@@ -149,6 +151,8 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - Modified `MethodOutput`, `TypeOutput`, `TraitOutput` with new fields
 - Updated `to_minimal()` transformations
 - Modified extraction functions (`extract_method()`, `extract_type_result()`, etc.)
+- `--detailed` CLI flag integrated with Commands::Query variant
+- Detail level enum (Minimal, Standard, Detailed) for clean state management
 
 ---
 
@@ -236,14 +240,14 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 | Category | Count | Phase Mapping |
 |----------|-------|---------------|
 | **FILT** (Filtering) | 7 | Phase 6, Phase 7 |
-| **FIELD** (Fields) | 7 | Phase 8 |
+| **FIELD** (Fields) | 8 | Phase 8 |
 | **REND** (Rendering) | 4 | Phase 9 |
 | **DOCS** (Documentation) | 7 | Phase 9 |
-| **Total** | **25** | **100% mapped** |
+| **Total** | **26** | **100% mapped** |
 
 ### Coverage Validation
 
-✓ All 25 v1.1 requirements mapped to exactly one phase  
+✓ All 26 v1.1 requirements mapped to exactly one phase  
 ✓ No orphaned requirements  
 ✓ No duplicate mappings  
 ✓ Natural delivery boundaries respected  
@@ -256,7 +260,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 |-------|--------|----------------|---------------------|
 | Phase 6 | 🟡 Planned | 7 (FILT-01..07) | 0/4 |
 | Phase 7 | 🔴 Not Started | 0 (implements Phase 6) | 0/4 |
-| Phase 8 | 🔴 Not Started | 7 (FIELD-01..07) | 0/7 |
+| Phase 8 | 🔴 Not Started | 8 (FIELD-01..08) | 0/8 |
 | Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 |
 | Phase 10 | 🔴 Not Started | 0 (integration) | 0/5 |
 
