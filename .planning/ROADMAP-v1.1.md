@@ -215,11 +215,11 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ### Plans
 
-- [ ] **09-01**: Create format_item() dispatcher in src/format/item.rs (REND-01, REND-02)
-- [ ] **09-02**: Create doc comment handler with truncation in src/format/doc.rs (DOCS-01..06)
-- [ ] **09-03**: Create BudgetTracker and integrate with text.rs (REND-04, DOCS-07)
+- [x] **09-01**: Create format_item() dispatcher in src/format/item.rs (REND-01, REND-02)
+- [x] **09-02**: Create doc comment handler with truncation in src/format/doc.rs (DOCS-01..06)
+- [x] **09-03**: Create BudgetTracker and integrate with text.rs (REND-04, DOCS-07)
 
-**Plans created:** 2026-02-13 | **Status:** Ready for execution
+**Plans:** 3 plans in 2 waves | **Status:** Ready for execution
 
 ---
 
