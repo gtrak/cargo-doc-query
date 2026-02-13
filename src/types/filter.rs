@@ -4,6 +4,7 @@
 //! query results based on patterns, kinds, crates, and visibility.
 
 use glob::Pattern;
+use thiserror::Error;
 
 /// Configuration for filtering query results
 #[derive(Debug, Clone, Default)]
@@ -67,6 +68,104 @@ impl FilterConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_filter_matches_all() {
+        let config = FilterConfig::default();
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("any::path", "struct", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_include_pattern_matching() {
+        let config = FilterConfig::default().with_include("std::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("std::vec::Vec", "struct", "std", "pub"));
+        assert!(!engine.matches("crate::foo::Bar", "struct", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_exclude_pattern_filtering() {
+        let config = FilterConfig::default().with_exclude("*Test*");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(!engine.matches("my_crate::TestStruct", "struct", "my_crate", "pub"));
+        assert!(engine.matches("my_crate::RealStruct", "struct", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_include_and_exclude_combined() {
+        let config = FilterConfig::default()
+            .with_include("std::*")
+            .with_exclude("*::test*");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("std::vec::Vec", "struct", "std", "pub"));
+        assert!(!engine.matches("std::test::Test", "struct", "std", "pub"));
+        assert!(!engine.matches("crate::foo", "struct", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_kind_filtering() {
+        let config = FilterConfig::default().with_kind("function");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("crate::foo", "function", "my_crate", "pub"));
+        assert!(!engine.matches("crate::foo", "struct", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_crate_filtering() {
+        let config = FilterConfig::default().with_crate("serde");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("serde::Serialize", "trait", "serde", "pub"));
+        assert!(!engine.matches("std::vec::Vec", "struct", "std", "pub"));
+    }
+
+    #[test]
+    fn test_visibility_filtering() {
+        let config = FilterConfig::default().with_visibility("pub(crate)");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("crate::foo", "fn", "my_crate", "pub(crate)"));
+        assert!(!engine.matches("crate::bar", "fn", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_invalid_glob_pattern_error() {
+        let config = FilterConfig::default().with_include("[invalid");
+        let result = FilterEngine::compile(&config);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid glob pattern"));
+    }
+
+    #[test]
+    fn test_empty_pattern_error() {
+        let config = FilterConfig::default().with_include("");
+        let result = FilterEngine::compile(&config);
+        assert!(matches!(result, Err(FilterError::EmptyPattern)));
+    }
+
+    #[test]
+    fn test_kind_case_insensitive() {
+        let config = FilterConfig::default().with_kind("STRUCT");
+        let engine = FilterEngine::compile(&config).unwrap();
+        assert!(engine.matches("crate::Foo", "struct", "my_crate", "pub"));
+        assert!(engine.matches("crate::Bar", "STRUCT", "my_crate", "pub"));
+    }
+
+    #[test]
+    fn test_engine_is_active() {
+        let config = FilterConfig::default();
+        assert!(!FilterEngine::compile(&config).unwrap().is_active());
+
+        let config_with_filters = FilterConfig::default().with_include("std::*");
+        assert!(FilterEngine::compile(&config_with_filters)
+            .unwrap()
+            .is_active());
+    }
+}
+
 /// Errors that can occur during filter pattern compilation
 #[derive(Error, Debug, Clone)]
 pub enum FilterError {
@@ -81,10 +180,7 @@ pub enum FilterError {
 impl From<glob::PatternError> for FilterError {
     fn from(err: glob::PatternError) -> Self {
         Self::InvalidGlob {
-            pattern: err
-                .pos()
-                .map(|p| format!("at position {}", p))
-                .unwrap_or_default(),
+            pattern: String::new(),
             message: err.to_string(),
         }
     }
@@ -199,42 +295,3 @@ impl FilterEngine {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_filter_config_defaults() {
-        let config = FilterConfig::default();
-        assert_eq!(config.include, vec![]);
-        assert_eq!(config.exclude, vec![]);
-        assert_eq!(config.kind, vec![]);
-        assert_eq!(config.crate_filter, vec![]);
-        assert_eq!(config.visibility, vec![]);
-    }
-
-    #[test]
-    fn test_filter_config_builder() {
-        let config = FilterConfig::default()
-            .with_include("std::*")
-            .with_exclude("*Test*")
-            .with_kind("function")
-            .with_crate("serde")
-            .with_visibility("pub(crate)");
-
-        assert_eq!(config.include, vec!["std::*"]);
-        assert_eq!(config.exclude, vec!["*Test*"]);
-        assert_eq!(config.kind, vec!["function"]);
-        assert_eq!(config.crate_filter, vec!["serde"]);
-        assert_eq!(config.visibility, vec!["pub(crate)"]);
-    }
-
-    #[test]
-    fn test_filter_config_has_filters() {
-        let config = FilterConfig::default();
-        assert!(!config.has_filters());
-
-        let config_with_filters = FilterConfig::default().with_include("std::*");
-        assert!(config_with_filters.has_filters());
-    }
-}
