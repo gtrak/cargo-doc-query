@@ -382,6 +382,25 @@ impl TypeExpander {
                     let item_path = self.get_path(&krate, *item_id);
                     let name = item.name.clone().unwrap_or_default();
 
+                    // Handle Use items specially (re-exports)
+                    if let ItemEnum::Use(use_data) = &item.inner {
+                        // Use items have source path and optional local name
+                        let use_name = if use_data.name.is_empty() {
+                            // Extract name from end of source path
+                            use_data.source.split("::").last().unwrap_or("").to_string()
+                        } else {
+                            use_data.name.clone()
+                        };
+
+                        let module_item = crate::types::expand::ModuleItemInfo::new(
+                            use_name,
+                            "re-export".to_string(),
+                            use_data.source.clone(),
+                        );
+                        node.add_item(module_item);
+                        continue;
+                    }
+
                     // Determine item kind
                     let kind = match &item.inner {
                         ItemEnum::Struct(_) => "struct",
@@ -394,7 +413,6 @@ impl TypeExpander {
                         ItemEnum::Constant { .. } => "const",
                         ItemEnum::Static(_) => "static",
                         ItemEnum::Macro(_) => "macro",
-                        ItemEnum::Use(_) => "use",
                         _ => "other",
                     };
 
