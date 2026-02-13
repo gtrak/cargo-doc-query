@@ -282,7 +282,7 @@ impl QueryEngine {
     ) -> Result<QueryContent> {
         match kind {
             "type" => Ok(QueryContent::Type(
-                self.extract_type_result(krate, id, item, options)?,
+                self.extract_type_result(krate, id, item, options, "")?,
             )),
             "trait" => Ok(QueryContent::Trait(
                 self.extract_trait_result(krate, item, options)?,
@@ -318,6 +318,7 @@ impl QueryEngine {
         id: Id,
         item: &Item,
         _options: &QueryOptions,
+        _crate_key: &str,
     ) -> Result<TypeResult> {
         // Determine type kind
         let kind_str = match &item.inner {

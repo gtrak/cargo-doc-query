@@ -115,32 +115,22 @@ impl TypeExpander {
     pub fn expand(&mut self, path: &str, crate_filter: Option<&str>) -> Result<ExpansionResult> {
         let mut graph = TypeGraph::new(path.to_string(), self.depth_limit);
 
-        // Collect crate names to load first (avoid borrow issues)
-        let crates_to_load: Vec<(String, String)> = self
+        // Collect crate names to search (sorted for deterministic order)
+        let mut crates_to_search: Vec<(String, String)> = self
             .index
             .nodes
             .iter()
             .filter(|n| crate_filter.map_or(true, |f| n.name == f))
             .map(|n| (n.name.clone(), n.version.clone()))
             .collect();
+        crates_to_search.sort_by(|a, b| a.0.cmp(&b.0));
 
-        // Load all crates first
-        for (name, version) in &crates_to_load {
+        // Try each crate one at a time, stop when found
+        for (name, version) in &crates_to_search {
             self.load_crate(name, version)?;
-        }
 
-        if self.crates.is_empty() {
-            return Err(anyhow::anyhow!("No crates loaded"));
-        }
-
-        // Try to find and expand the type in each loaded crate
-        // Sort keys for deterministic iteration order
-        let mut crate_keys: Vec<String> = self.crates.keys().cloned().collect();
-        crate_keys.sort();
-        let mut found = false;
-
-        for key in crate_keys {
-            // Get a reference to the crate - we need to be careful about borrowing
+            // Check if this crate has the type
+            let key = format!("{}::{}", name, version);
             let items: Vec<(String, Id, Item)> = {
                 let krate = self.crates.get(&key).unwrap();
                 PathResolver::find_by_path(krate, path)
@@ -150,11 +140,12 @@ impl TypeExpander {
             };
 
             if items.is_empty() {
+                // Remove from cache to free memory
+                self.crates.remove(&key);
                 continue;
             }
 
-            found = true;
-
+            // Found it - expand
             for (crate_name, id, item) in items {
                 self.visited.clear();
                 self.current_depth = 0;
@@ -163,7 +154,8 @@ impl TypeExpander {
                     ItemEnum::Struct(_)
                     | ItemEnum::Enum(_)
                     | ItemEnum::Union(_)
-                    | ItemEnum::TypeAlias(_) => {
+                    | ItemEnum::TypeAlias(_)
+                    | ItemEnum::Trait(_) => {
                         if let Some(node) = self.expand_item(&crate_name, &id, 0)? {
                             // Update token count for the node
                             self.add_tokens(node.estimate_tokens());
@@ -180,9 +172,12 @@ impl TypeExpander {
                     }
                 }
             }
+
+            // Only expand first crate that has the type
+            break;
         }
 
-        if !found {
+        if graph.nodes.is_empty() {
             return Err(anyhow::anyhow!("No items found matching path: {}", path));
         }
 
