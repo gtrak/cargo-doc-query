@@ -99,10 +99,19 @@ enum Commands {
     /// Queries the documentation index for a specific type path and returns
     /// methods, trait implementations, and optionally expands nested types.
     ///
+    /// FILTERING OPTIONS:
+    /// - --include/-i <PATTERN>: Include items matching glob pattern (multiple allowed)
+    /// - --exclude/-e <PATTERN>: Exclude items matching glob pattern (multiple allowed)
+    /// - --kind/-k <KIND>: Filter by item kind (struct, enum, trait, function, etc.)
+    /// - --crate <CRATE>: Filter by crate name (multiple allowed)
+    /// - --visibility <VIS>: Filter by visibility (pub, pub(crate), pub(super), private)
+    /// - --only <PATTERN>: Include only matching items, exclude everything else
+    ///
     /// EXAMPLES:
     ///     cargo doc-query query std::vec::Vec
     ///     cargo doc-query query anyhow::Error --depth 2
-    ///     cargo doc-query query std::collections::HashMap --depth 1
+    ///     cargo doc-query query std::collections::HashMap --depth 1 --include "std::*"
+    ///     cargo doc-query query serde::Serialize --kind trait --crate serde
     #[command(name = "query")]
     Query {
         /// The path to query (e.g., std::vec::Vec)
@@ -131,6 +140,30 @@ enum Commands {
         /// Output as JSON instead of human-readable text
         #[arg(long)]
         json: bool,
+
+        /// Include items matching glob pattern (multiple allowed)
+        #[arg(short, long, value_name = "PATTERN")]
+        include: Vec<String>,
+
+        /// Exclude items matching glob pattern (multiple allowed)
+        #[arg(short, long, value_name = "PATTERN")]
+        exclude: Vec<String>,
+
+        /// Filter by item kind (struct, enum, trait, function, etc.) (multiple allowed)
+        #[arg(short, long, value_name = "KIND")]
+        kind: Vec<String>,
+
+        /// Filter by crate name (multiple allowed)
+        #[arg(long, value_name = "CRATE")]
+        crate_filter: Vec<String>,
+
+        /// Filter by visibility (pub, pub(crate), pub(super), private)
+        #[arg(long, value_name = "VIS")]
+        visibility: Vec<String>,
+
+        /// Include only matching items, exclude everything else
+        #[arg(long, value_name = "PATTERN")]
+        only: Option<String>,
     },
 }
 
