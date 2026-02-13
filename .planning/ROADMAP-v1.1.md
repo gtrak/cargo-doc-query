@@ -145,6 +145,14 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - Phase 7: CLI Integration — filter flags must be wired
 - Existing QueryMatch and QueryContent types from v1.0
 
+### Plans
+
+- [ ] **08-01**: Create DetailLevel enum and metadata extraction utilities (FIELD-01..05 foundation)
+- [ ] **08-02**: Extend QueryMatch, MethodOutput, TypeResult, TraitResult with new fields (FIELD-01..05, FIELD-07)
+- [ ] **08-03**: Extend TypeNode and ModuleItemInfo for expand command (FIELD-01..05 for expansion)
+- [ ] **08-04**: Add --detailed flag and wire DetailLevel through CLI (FIELD-08)
+- [ ] **08-05**: Update extraction functions to populate new fields (FIELD-06, integration)
+
 ### Deliverables
 
 - Extended `QueryMatch` struct with optional fields (visibility, deprecation, attrs)
@@ -258,9 +266,9 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 | Phase | Status | Requirements | Success Criteria Met |
 |-------|--------|----------------|---------------------|
-| Phase 6 | 🟡 Planned | 7 (FILT-01..07) | 0/4 |
-| Phase 7 | 🔴 Not Started | 0 (implements Phase 6) | 0/4 |
-| Phase 8 | 🔴 Not Started | 8 (FIELD-01..08) | 0/8 |
+| Phase 6 | ✅ Complete | 7 (FILT-01..07) | 4/4 |
+| Phase 7 | ✅ Complete | 0 (implements Phase 6) | 4/4 |
+| Phase 8 | 🟡 Planned | 8 (FIELD-01..08) | 0/8 |
 | Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 |
 | Phase 10 | 🔴 Not Started | 0 (integration) | 0/5 |
 
