@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 7 — CLI Integration
-**Plan:** 2 of 3 in current phase
-**Status:** Plan complete
-**Last activity:** 2026-02-13 — Completed 07-02-SUMMARY.md
+**Plan:** 3 of 3 in current phase
+**Status:** Phase complete
+**Last activity:** 2026-02-13 — Completed 07-03-SUMMARY.md
 
-Progress: ██████████████████████████████████████░ 100% (Phase 7) | 21/25 (84%)
+Progress: ████████████████████████████████████████ 100% (Phase 7) | 22/25 (88%)
 
 ---
 
@@ -44,7 +44,7 @@ Progress: ███████████████████████�
 | Phase | Status | Requirements | Key Deliverable |
 |-------|--------|--------------|-----------------|
 | 6. Foundation | ✅ Complete | 2/2 | FilterEngine with glob matching, validation, stats |
-| 7. CLI Integration | 🔄 In Progress | 2/3 | FilterEngine wired to CLI (expand command complete) |
+| 7. CLI Integration | ✅ Complete | 3/3 | FilterEngine wired to CLI with validation and help |
 | 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
 | 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
 | 10. Integration | ○ Pending | 0 | End-to-end validation |
@@ -100,6 +100,17 @@ Completed plan 07-02 for expand command filter integration:
 - Verified zero overhead when no filters configured
 - All tests passing (212 tests)
 
+Completed plan 07-03 for filter validation and help text:
+- Added comprehensive validation for conflicting filter flags
+- Implemented --include + --only mutual exclusivity detection
+- Added visibility validation for pub, pub(crate), pub(super), pub(in path), private
+- Enhanced FILTERING section in --help with 5 examples
+- Implemented --help-filters flag (works without PATH argument)
+- Added comprehensive glob syntax documentation with examples
+- Enhanced error messages for invalid patterns (4-part format)
+- Case-insensitive kind matching confirmed working
+- All validation scenarios tested and passing
+
 v1.1 start with focus shift:
 - Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
 - Prioritizing rendering consistency and output refinement
@@ -117,6 +128,9 @@ v1.1 start with focus shift:
 - --only takes precedence over --include for include patterns
 - --kind values are normalized to lowercase (case-insensitive matching)
 - crate_filter field name avoids Rust keyword conflict
+- PATH argument made optional to support --help-filters
+- Error messages follow 4-part format: what, why, example, reference
+- pub(in path) visibility format supported alongside standard options
 
 **Blockers:** None
 
@@ -130,7 +144,7 @@ v1.1 start with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
-| Plans completed | 22/25 (88%) | 25 total |
+| Plans completed | 23/25 (92%) | 25 total |
 | Milestones complete | 1/1 | 1 in progress |
 
 ---
