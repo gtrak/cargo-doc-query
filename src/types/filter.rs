@@ -419,7 +419,6 @@ impl Filterable for QueryMatch {
     }
 }
 
-#[cfg(feature = "expand")]
 impl Filterable for crate::types::expand::TypeNode {
     fn filter_path(&self) -> &str {
         &self.id
