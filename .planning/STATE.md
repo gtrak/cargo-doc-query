@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 9 — Unified Rendering
-**Plan:** 2 of N in current phase
+**Plan:** 3 of N in current phase
 **Status:** In progress
-**Last activity:** 2026-02-13 — Completed 09-02-SUMMARY.md
+**Last activity:** 2026-02-13 — Completed 09-03-SUMMARY.md
 
-Progress: ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 10% (Phase 9) | 30/33 (91%)
+Progress: ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 10% (Phase 9) | 31/33 (94%)
 
 ---
 
@@ -71,11 +71,25 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 21:51 UTC
-**Stopped at:** Completed 09-02-SUMMARY.md
-**Resume file:** .planning/phases/09-unified-rendering/09-02-SUMMARY.md
+**Last session:** 2026-02-13 21:57 UTC
+**Stopped at:** Completed 09-03-SUMMARY.md
+**Resume file:** .planning/phases/09-unified-rendering/09-03-SUMMARY.md
 
 ### Recent Context
+
+Completed plan 09-03 for token budget integration:
+- Created src/format/budget.rs with BudgetTracker struct
+- track_item() for per-item token accounting
+- would_exceed(), remaining(), is_warning_needed() methods
+- TruncationAction enum: Include/Truncate
+- estimate_item_tokens() for formatted item cost estimation
+- 8 comprehensive tests for all functionality
+- Integrates token budget at rendering layer per REND-04
+- Updated format/mod.rs to export budget module
+- Integrated ItemFormatter and BudgetTracker into format/text.rs
+- Added format_with_item_formatter() and format_expand_result_with_formatter()
+- Displays truncation warning when budget threshold reached
+- All 308 library tests pass
 
 Completed plan 09-02 for doc comment handler:
 - Created src/format/doc.rs with DocHandler struct
@@ -195,6 +209,10 @@ v1.1 start with focus shift:
 - Phase 09-02: DocHandler returns None for docs in Minimal mode (DOCS-03)
 - Phase 09-02: truncate_docs returns (String, bool) to indicate truncation
 - Phase 09-02: Code blocks (```) preserved over prose during truncation
+- Phase 09-03: BudgetTracker integrates at rendering layer per REND-04
+- Phase 09-03: TruncationAction enum: Include/Truncate for budget decisions
+- Phase 09-03: Warning threshold default 0.8 (80%)
+- Phase 09-03: estimate_item_tokens() uses rough calculation: 20 base + 5/field + 5/variant + 10/nested + docs/4
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
