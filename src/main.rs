@@ -99,19 +99,22 @@ enum Commands {
     /// Queries the documentation index for a specific type path and returns
     /// methods, trait implementations, and optionally expands nested types.
     ///
-    /// FILTERING OPTIONS:
-    /// - --include/-i <PATTERN>: Include items matching glob pattern (multiple allowed)
-    /// - --exclude/-e <PATTERN>: Exclude items matching glob pattern (multiple allowed)
-    /// - --kind/-k <KIND>: Filter by item kind (struct, enum, trait, function, etc.)
-    /// - --crate <CRATE>: Filter by crate name (multiple allowed)
-    /// - --visibility <VIS>: Filter by visibility (pub, pub(crate), pub(super), private)
-    /// - --only <PATTERN>: Include only matching items, exclude everything else
+    /// FILTERING:
+    /// Filter results using glob patterns and criteria. Multiple filters combine with AND logic.
+    /// Multiple values for the same flag combine with OR logic.
+    ///
+    ///     --include "std::*"              Show only items from std crate
+    ///     --exclude "*::test*"            Exclude items with "test" in path
+    ///     --kind function                 Show only functions
+    ///     --only "serde::*"               Show only serde items (shorthand)
+    ///     --include "std::*" --kind fn    Show only std functions (AND logic)
     ///
     /// EXAMPLES:
-    ///     cargo doc-query query std::vec::Vec
-    ///     cargo doc-query query anyhow::Error --depth 2
-    ///     cargo doc-query query std::collections::HashMap --depth 1 --include "std::*"
-    ///     cargo doc-query query serde::Serialize --kind trait --crate serde
+    ///     cargo doc-query query Vec --include "std::*"
+    ///     cargo doc-query query Error --exclude "*test*" --kind struct
+    ///     cargo doc-query query Serialize --only "serde::*"
+    ///
+    /// For detailed glob pattern syntax, run: cargo doc-query query --help-filters
     #[command(name = "query")]
     Query {
         /// The path to query (e.g., std::vec::Vec)
@@ -141,29 +144,33 @@ enum Commands {
         #[arg(long)]
         json: bool,
 
-        /// Include items matching glob pattern (multiple allowed)
+        /// Include items matching glob pattern. Multiple allowed (OR logic).
         #[arg(short, long, value_name = "PATTERN")]
         include: Vec<String>,
 
-        /// Exclude items matching glob pattern (multiple allowed)
+        /// Exclude items matching glob pattern. Multiple allowed (OR logic).
         #[arg(short, long, value_name = "PATTERN")]
         exclude: Vec<String>,
 
-        /// Filter by item kind (struct, enum, trait, function, etc.) (multiple allowed)
+        /// Filter by item kind (struct, enum, trait, function, etc.). Case-insensitive.
         #[arg(short, long, value_name = "KIND")]
         kind: Vec<String>,
 
-        /// Filter by crate name (multiple allowed)
+        /// Filter by crate name. Multiple allowed.
         #[arg(long, value_name = "CRATE")]
         crate_filter: Vec<String>,
 
-        /// Filter by visibility (pub, pub(crate), pub(super), private)
+        /// Filter by visibility: pub, pub(crate), pub(super), pub(in path), private
         #[arg(long, value_name = "VIS")]
         visibility: Vec<String>,
 
-        /// Include only matching items, exclude everything else
+        /// Include only matching items, exclude everything else. Mutually exclusive with --include.
         #[arg(long, value_name = "PATTERN")]
         only: Option<String>,
+
+        /// Display glob syntax help and exit
+        #[arg(long)]
+        help_filters: bool,
     },
 }
 
@@ -223,6 +230,13 @@ fn run(cli: Cli) -> Result<(), AppError> {
             minimal,
             tokens,
             json,
+            include,
+            exclude,
+            kind,
+            crate_filter,
+            visibility,
+            only,
+            help_filters,
         } => {
             // Always use expand (unified rendering)
             // Default depth is 1 to show submodules, depth=0 shows just the type
@@ -233,6 +247,13 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 crate_name.clone(),
                 *tokens,
                 *minimal,
+                include.clone(),
+                exclude.clone(),
+                kind.clone(),
+                crate_filter.clone(),
+                visibility.clone(),
+                only.clone(),
+                *help_filters,
             );
             cmd.json = *json;
             cmd.quiet = quiet;
