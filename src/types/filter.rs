@@ -170,6 +170,108 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod edge_case_tests {
+    use super::*;
+
+    #[test]
+    fn test_unicode_paths() {
+        let config = FilterConfig::default().with_include("crate::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("crate::日本語", "fn", "crate", "pub"));
+        assert!(engine.matches("crate::émojis_🎉", "fn", "crate", "pub"));
+    }
+
+    #[test]
+    fn test_special_regex_chars() {
+        // Glob patterns should treat regex chars literally
+        let config = FilterConfig::default().with_include("crate::foo.*bar"); // . should match literal dot
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("crate::foo.bar", "fn", "crate", "pub"));
+        assert!(!engine.matches("crate::fooxbar", "fn", "crate", "pub"));
+
+        // Test parentheses
+        let config2 = FilterConfig::default().with_include("crate::foo(bar)");
+        let engine2 = FilterEngine::compile(&config2).unwrap();
+        assert!(engine2.matches("crate::foo(bar)", "fn", "crate", "pub"));
+    }
+
+    #[test]
+    fn test_many_patterns_performance() {
+        let mut config = FilterConfig::default();
+        // Add 100 include patterns
+        for i in 0..100 {
+            config = config.with_include(&format!("crate::item{}", i));
+        }
+        // Add 100 exclude patterns
+        for i in 0..100 {
+            config = config.with_exclude(&format!("crate::exclude{}", i));
+        }
+
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        // Should still work efficiently
+        assert!(engine.matches("crate::item50", "fn", "crate", "pub"));
+        assert!(!engine.matches("crate::exclude50", "fn", "crate", "pub"));
+    }
+
+    #[test]
+    fn test_overlapping_patterns() {
+        // Include and exclude can overlap - exclude wins
+        let config = FilterConfig::default()
+            .with_include("crate::*")
+            .with_exclude("crate::test_*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("crate::foo", "fn", "crate", "pub"));
+        assert!(!engine.matches("crate::test_helper", "fn", "crate", "pub"));
+    }
+
+    #[test]
+    fn test_empty_string_matching() {
+        let config = FilterConfig::default().with_include(""); // Should fail on compile
+        let result = FilterEngine::compile(&config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_whitespace_patterns() {
+        // Whitespace should be treated literally in paths
+        let config = FilterConfig::default().with_include("* ::*"); // Space in pattern
+                                                                    // This is technically a valid glob, just unlikely to match much
+        let result = FilterEngine::compile(&config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_case_sensitivity() {
+        // Crate names are case-sensitive
+        let config = FilterConfig::default().with_crate("Serde"); // Note capital S
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("serde::Serialize", "trait", "Serde", "pub"));
+        assert!(!engine.matches("serde::Serialize", "trait", "serde", "pub"));
+
+        // Kinds are case-insensitive
+        let config2 = FilterConfig::default().with_kind("STRUCT");
+        let engine2 = FilterEngine::compile(&config2).unwrap();
+        assert!(engine2.matches("crate::Foo", "struct", "crate", "pub"));
+        assert!(engine2.matches("crate::Bar", "STRUCT", "crate", "pub"));
+    }
+
+    #[test]
+    fn test_path_with_double_colons() {
+        // Paths with multiple :: should work
+        let config = FilterConfig::default().with_include("a::b::c::d::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("a::b::c::d::item", "fn", "a", "pub"));
+        assert!(!engine.matches("a::b::c::other", "fn", "a", "pub"));
+    }
+}
+
 /// Errors that can occur during filter pattern compilation
 #[derive(Error, Debug, Clone)]
 pub enum FilterError {
