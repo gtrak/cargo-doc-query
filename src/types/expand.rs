@@ -776,4 +776,213 @@ mod tests {
         let tokens = graph.estimate_tokens();
         assert!(tokens > 0);
     }
+
+    // =========================================================================
+    // Backward Compatibility Tests
+    // =========================================================================
+
+    #[test]
+    fn test_typenode_optional_fields_omitted() {
+        let node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        let json = serde_json::to_string(&node).unwrap();
+
+        // Should not contain the new optional field keys when not set
+        assert!(!json.contains("\"is_deprecated\""));
+        assert!(!json.contains("\"deprecation_note\""));
+        assert!(!json.contains("\"attributes\""));
+        assert!(!json.contains("\"is_const\""));
+        assert!(!json.contains("\"is_async\""));
+        assert!(!json.contains("\"is_unsafe\""));
+        assert!(!json.contains("\"abi\""));
+    }
+
+    #[test]
+    fn test_typenode_optional_fields_present_when_set() {
+        let node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0)
+            .with_deprecation(true, Some("Use NewType instead".to_string()))
+            .with_attributes(vec!["#[must_use]".to_string()])
+            .with_function_modifiers(true, false, true, Some("C".to_string()));
+        let json = serde_json::to_string(&node).unwrap();
+
+        // Should contain the fields when set
+        assert!(json.contains("\"is_deprecated\":true"));
+        assert!(json.contains("\"deprecation_note\":\"Use NewType instead\""));
+        assert!(json.contains("\"attributes\""));
+        assert!(json.contains("\"is_const\":true"));
+        assert!(json.contains("\"is_unsafe\":true"));
+        assert!(json.contains("\"abi\":\"C\""));
+    }
+
+    #[test]
+    fn test_typenode_minimal_smaller() {
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+        node.add_field(FieldInfo::new("y".to_string(), "f64".to_string(), true));
+        node.add_generic_param("T".to_string());
+        node.is_deprecated = Some(true);
+        node.attributes = vec!["#[must_use]".to_string()];
+        node.is_const = Some(true);
+
+        let full_json = serde_json::to_string(&node).unwrap();
+        let minimal = node.to_minimal();
+        let minimal_json = serde_json::to_string(&minimal).unwrap();
+
+        // Minimal should be smaller
+        assert!(
+            minimal_json.len() < full_json.len(),
+            "Minimal JSON should be smaller: {} < {}",
+            minimal_json.len(),
+            full_json.len()
+        );
+
+        // Minimal should have counts but no details
+        assert!(!minimal_json.contains("\"x\"")); // No field names
+        assert!(!minimal_json.contains("\"y\""));
+        assert!(!minimal_json.contains("\"T\"")); // No generic params
+        assert!(!minimal_json.contains("\"is_deprecated\"")); // Cleared in minimal
+        assert!(!minimal_json.contains("\"attributes\""));
+    }
+
+    #[test]
+    fn test_module_item_info_backward_compat() {
+        let item = ModuleItemInfo::new(
+            "func".to_string(),
+            "function".to_string(),
+            "test::func".to_string(),
+        )
+        .with_signature("fn() -> i32".to_string())
+        .with_visibility("pub")
+        .with_generics("<T>".to_string())
+        .with_function_modifiers(false, true, false, None);
+
+        let json = serde_json::to_string(&item).unwrap();
+
+        // Should contain all new fields when set
+        assert!(json.contains("\"visibility\":\"pub\""));
+        assert!(json.contains("\"generics\":\"<T>\""));
+        assert!(json.contains("\"is_async\":true"));
+
+        // Old code without new fields should still deserialize
+        #[derive(serde::Deserialize)]
+        struct OldItem {
+            name: String,
+            kind: String,
+            path: String,
+        }
+
+        let old: OldItem = serde_json::from_str(&json).unwrap();
+        assert_eq!(old.name, "func");
+        assert_eq!(old.kind, "function");
+        assert_eq!(old.path, "test::func");
+    }
+
+    #[test]
+    fn test_module_item_info_minimal() {
+        let item = ModuleItemInfo::new(
+            "func".to_string(),
+            "function".to_string(),
+            "test::func".to_string(),
+        )
+        .with_signature("fn() -> i32".to_string())
+        .with_visibility("pub")
+        .with_generics("<T>".to_string())
+        .with_function_modifiers(true, false, false, Some("C".to_string()));
+
+        let full_json = serde_json::to_string(&item).unwrap();
+        let minimal = item.to_minimal();
+        let minimal_json = serde_json::to_string(&minimal).unwrap();
+
+        // Minimal should be smaller
+        assert!(
+            minimal_json.len() < full_json.len(),
+            "Minimal JSON should be smaller: {} < {}",
+            minimal_json.len(),
+            full_json.len()
+        );
+
+        // Minimal should not contain optional fields
+        assert!(!minimal_json.contains("\"signature\""));
+        assert!(!minimal_json.contains("\"visibility\""));
+        assert!(!minimal_json.contains("\"generics\""));
+        assert!(!minimal_json.contains("\"is_const\""));
+    }
+
+    #[test]
+    fn test_module_item_info_omits_none_fields() {
+        let item = ModuleItemInfo::new(
+            "type".to_string(),
+            "type".to_string(),
+            "test::Type".to_string(),
+        );
+        let json = serde_json::to_string(&item).unwrap();
+
+        // Should not contain optional fields when None
+        assert!(!json.contains("\"signature\""));
+        assert!(!json.contains("\"visibility\""));
+        assert!(!json.contains("\"generics\""));
+        assert!(!json.contains("\"is_const\""));
+        assert!(!json.contains("\"is_async\""));
+        assert!(!json.contains("\"is_unsafe\""));
+        assert!(!json.contains("\"abi\""));
+
+        // Should contain required fields
+        assert!(json.contains("\"name\":\"type\""));
+        assert!(json.contains("\"kind\":\"type\""));
+        assert!(json.contains("\"path\":\"test::Type\""));
+    }
+
+    #[test]
+    fn test_type_graph_nodes_minimal() {
+        let mut graph = TypeGraph::new("test".to_string(), 10);
+        let mut node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0);
+        node.add_field(FieldInfo::new("x".to_string(), "i32".to_string(), false));
+        node.add_generic_param("T".to_string());
+        node.is_deprecated = Some(true);
+        graph.add_node(node);
+
+        let full_json = serde_json::to_string(&graph).unwrap();
+        let minimal = graph.to_minimal();
+        let minimal_json = serde_json::to_string(&minimal).unwrap();
+
+        // Minimal graph should be smaller
+        assert!(
+            minimal_json.len() < full_json.len(),
+            "Minimal graph JSON should be smaller: {} < {}",
+            minimal_json.len(),
+            full_json.len()
+        );
+
+        // Minimal should have field_count but no fields
+        assert!(minimal_json.contains("\"field_count\":1"));
+        assert!(!minimal_json.contains("\"is_deprecated\""));
+    }
+
+    #[test]
+    fn test_builder_chaining() {
+        let node = TypeNode::new("test::Type".to_string(), "struct".to_string(), 0)
+            .with_deprecation(true, Some("old".to_string()))
+            .with_attributes(vec!["#[must_use]".to_string()])
+            .with_function_modifiers(false, false, false, None);
+
+        assert_eq!(node.is_deprecated, Some(true));
+        assert_eq!(node.deprecation_note, Some("old".to_string()));
+        assert_eq!(node.attributes, vec!["#[must_use]"]);
+        assert_eq!(node.is_const, Some(false));
+
+        let item = ModuleItemInfo::new(
+            "func".to_string(),
+            "function".to_string(),
+            "test::func".to_string(),
+        )
+        .with_signature("fn()".to_string())
+        .with_visibility("pub")
+        .with_generics("<T>".to_string())
+        .with_function_modifiers(true, true, false, Some("C".to_string()));
+
+        assert_eq!(item.visibility, Some("pub".to_string()));
+        assert_eq!(item.generics, Some("<T>".to_string()));
+        assert_eq!(item.is_const, Some(true));
+        assert_eq!(item.is_async, Some(true));
+        assert_eq!(item.abi, Some("C".to_string()));
+    }
 }
