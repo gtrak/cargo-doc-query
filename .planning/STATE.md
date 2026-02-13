@@ -1,18 +1,19 @@
 # Project State: cargo-doc-query
 
-**Milestone:** v1.1 Output Refinement — Defining requirements
-**Current Phase:** Not started (defining requirements)
-**Status:** Research in progress
+**Milestone:** v1.1 Output Refinement — Ready to build
+**Current Phase:** 6 (5 phases planned)
+**Status:** Requirements defined, roadmap created
 **Last Updated:** 2026-02-13
+**Roadmap:** `.planning/ROADMAP-v1.1.md`
 
 ---
 
 ## Current Position
 
-**Phase:** Not started (defining requirements)
+**Phase:** 6 — Foundation (FilterEngine)
 **Plan:** —
-**Status:** Defining requirements
-**Last activity:** 2026-02-13 — Milestone v1.1 started (output refinement focus)
+**Status:** Ready to start
+**Last activity:** 2026-02-13 — Milestone v1.1 roadmap created (5 phases, 25 requirements)
 
 ---
 
@@ -34,9 +35,19 @@
 - ~7,172 lines of Rust code
 - 2 days from start to ship
 
-### v1.1 Output Refinement (In Planning)
+### v1.1 Output Refinement (Ready — 5 phases)
 
 **Focus:** Unified rendering, robust filtering, documentation support
+
+| Phase | Status | Requirements | Key Deliverable |
+|-------|--------|--------------|-----------------|
+| 6. Foundation | ○ Pending | 7 | FilterEngine with glob matching |
+| 7. CLI Integration | ○ Pending | 0 | Wire filters to CLI |
+| 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
+| 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
+| 10. Integration | ○ Pending | 0 | End-to-end validation |
+
+**Requirements:** 25 total | **Coverage:** 100% mapped ✓
 
 ---
 
