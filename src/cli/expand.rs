@@ -137,7 +137,7 @@ impl Command for ExpandCommand {
             self.crate_name.as_deref(),
             token_config,
         )
-        .context("Expansion failed")?;
+        .context(format!("Expansion failed for path: {}", self.path))?;
 
         let duration = start.elapsed();
 

@@ -316,12 +316,21 @@ fn format_type_node(node: &crate::types::expand::TypeNode, indent: usize) {
             };
             println!("{}  {}:", indent_str, kind_label);
             for item in items {
-                println!(
-                    "{}    • {}: {}",
-                    indent_str,
-                    style(&item.name).yellow(),
-                    item.path
-                );
+                if let Some(sig) = &item.signature {
+                    println!(
+                        "{}    • {} {}",
+                        indent_str,
+                        style(&item.name).yellow(),
+                        style(sig).dim()
+                    );
+                } else {
+                    println!(
+                        "{}    • {}: {}",
+                        indent_str,
+                        style(&item.name).yellow(),
+                        item.path
+                    );
+                }
             }
         }
     }

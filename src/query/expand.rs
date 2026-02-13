@@ -166,8 +166,30 @@ impl TypeExpander {
                         // Expand module contents
                         self.expand_module(&crate_name, &id, 0, &mut graph)?;
                     }
+                    ItemEnum::Function(func) => {
+                        // Handle functions - show as a node with signature
+                        // crate_name is actually the key (name::version)
+                        let krate = self.crates.get(&crate_name).unwrap();
+                        let type_path = self.get_path(krate, id);
+                        let mut node = TypeNode::new(type_path.clone(), "function".to_string(), 0);
+
+                        // Extract function signature from function item
+                        let signature = format_function_signature(&item, func);
+
+                        // Add as a module item so it shows in output
+                        let module_item = crate::types::expand::ModuleItemInfo::new(
+                            item.name.clone().unwrap_or_default(),
+                            "function".to_string(),
+                            type_path,
+                        )
+                        .with_signature(signature);
+                        node.add_item(module_item);
+
+                        self.add_tokens(node.estimate_tokens());
+                        graph.add_node(node);
+                    }
                     _ => {
-                        // Skip items that aren't types or modules (macros, etc.)
+                        // Skip items that aren't types, modules, or functions
                         continue;
                     }
                 }
@@ -503,6 +525,74 @@ impl TypeExpander {
             .get(&id)
             .map(|summary| summary.path.join("::"))
             .unwrap_or_else(|| format!("{:?}", id))
+    }
+}
+
+/// Format a function's signature from its rustdoc item
+fn format_function_signature(item: &Item, func: &rustdoc_types::Function) -> String {
+    let mut sig_parts = Vec::new();
+
+    // Function name
+    if let Some(name) = &item.name {
+        sig_parts.push(name.clone());
+    }
+
+    // Generic parameters
+    if !func.generics.params.is_empty() {
+        let params: Vec<String> = func
+            .generics
+            .params
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        sig_parts.push(format!("<{}>", params.join(", ")));
+    }
+
+    // Parameters from FunctionSignature
+    let params: Vec<String> = func
+        .sig
+        .inputs
+        .iter()
+        .map(|(name, ty)| format!("{}: {}", name, format_type_signature(ty)))
+        .collect();
+    sig_parts.push(format!("({})", params.join(", ")));
+
+    // Return type
+    if let Some(ret) = &func.sig.output {
+        let ret_str = match ret {
+            rustdoc_types::Type::ResolvedPath(path) => path.path.clone(),
+            rustdoc_types::Type::Primitive(p) => p.clone(),
+            rustdoc_types::Type::Tuple(types) => {
+                let inner: Vec<String> = types.iter().map(|t| format_type_signature(t)).collect();
+                format!("({})", inner.join(", "))
+            }
+            _ => format!("{:?}", ret),
+        };
+        sig_parts.push(format!("-> {}", ret_str));
+    }
+
+    sig_parts.join(" ")
+}
+
+fn format_type_signature(ty: &rustdoc_types::Type) -> String {
+    match ty {
+        rustdoc_types::Type::ResolvedPath(path) => path.path.clone(),
+        rustdoc_types::Type::Primitive(p) => p.clone(),
+        rustdoc_types::Type::Generic(g) => g.clone(),
+        rustdoc_types::Type::Slice(inner) => format!("[{}]", format_type_signature(inner)),
+        rustdoc_types::Type::Array { type_, len } => {
+            format!("[{}; {}]", format_type_signature(type_), len)
+        }
+        rustdoc_types::Type::Tuple(types) => {
+            let parts: Vec<String> = types.iter().map(|t| format_type_signature(t)).collect();
+            format!("({})", parts.join(", "))
+        }
+        rustdoc_types::Type::RawPointer { type_, is_mutable } => {
+            let mut_str = if *is_mutable { "mut " } else { "const " };
+            format!("*{}{}", mut_str, format_type_signature(type_))
+        }
+        rustdoc_types::Type::BorrowedRef { type_, .. } => format_type_signature(type_),
+        _ => format!("{:?}", ty),
     }
 }
 

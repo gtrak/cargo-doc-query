@@ -190,6 +190,27 @@ pub struct ModuleItemInfo {
     pub kind: String,
     /// Item path
     pub path: String,
+    /// Function signature (for functions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
+impl ModuleItemInfo {
+    /// Create a new module item info
+    pub fn new(name: String, kind: String, path: String) -> Self {
+        Self {
+            name,
+            kind,
+            path,
+            signature: None,
+        }
+    }
+
+    /// Create a new module item info with signature
+    pub fn with_signature(mut self, signature: String) -> Self {
+        self.signature = Some(signature);
+        self
+    }
 }
 
 impl TypeGraph {
@@ -332,13 +353,6 @@ impl VariantInfo {
     pub fn with_discriminant(mut self, discriminant: String) -> Self {
         self.discriminant = Some(discriminant);
         self
-    }
-}
-
-impl ModuleItemInfo {
-    /// Create a new module item info
-    pub fn new(name: String, kind: String, path: String) -> Self {
-        Self { name, kind, path }
     }
 }
 

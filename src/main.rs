@@ -34,9 +34,9 @@ EXAMPLES:
     cargo doc-query query std::vec::Vec
     cargo doc-query query anyhow::Error --minimal
 
-    # Expand a type hierarchy
-    cargo doc-query expand anyhow::Error --depth 2
-    cargo doc-query expand std::collections --depth 1
+    # Query with nested type expansion
+    cargo doc-query query anyhow::Error --depth 2
+    cargo doc-query query std::collections::HashMap --depth 1
 
     # Query with token budget for LLM contexts
     cargo doc-query query serde_json::Value --tokens 500
@@ -75,19 +75,27 @@ enum Commands {
     #[command(name = "build")]
     Build,
 
-    /// Query methods and traits for a type
+    /// Query a type's methods, traits, and optionally expand nested types
     ///
     /// Queries the documentation index for a specific type path and returns
-    /// methods, trait implementations, and associated types.
+    /// methods, trait implementations, and optionally expands nested types.
     ///
     /// EXAMPLES:
     ///     cargo doc-query query std::vec::Vec
-    ///     cargo doc-query query anyhow::Error --crate-name anyhow
-    ///     cargo doc-query query serde::Deserialize --minimal
+    ///     cargo doc-query query anyhow::Error --depth 2
+    ///     cargo doc-query query std::collections::HashMap --depth 1
     #[command(name = "query")]
     Query {
         /// The path to query (e.g., std::vec::Vec)
         path: String,
+
+        /// Maximum recursion depth for expanding nested types (default: 0)
+        ///
+        /// - depth 0: Show methods and traits only (no nested types)
+        /// - depth 1: Expand direct field types
+        /// - depth 2+: Recursively expand nested types
+        #[arg(long, default_value = "0", value_name = "N")]
+        depth: u32,
 
         /// Limit to specific crate
         #[arg(long, value_name = "CRATE")]
@@ -115,41 +123,6 @@ enum Commands {
         /// Maximum tokens in output (approximate)
         #[arg(long, value_name = "N")]
         tokens: Option<usize>,
-
-        /// Output as JSON instead of human-readable text
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Expand a type to show its full type hierarchy
-    ///
-    /// Recursively expands a type or module to show its complete structure,
-    /// including fields, variants, and nested types up to the specified depth.
-    ///
-    /// EXAMPLES:
-    ///     cargo doc-query expand anyhow::Error --depth 2
-    ///     cargo doc-query expand std::collections::HashMap --depth 1
-    ///     cargo doc-query expand mycrate::config --depth 3 --minimal
-    #[command(name = "expand")]
-    Expand {
-        /// The type path to expand (e.g., anyhow::Error)
-        path: String,
-
-        /// Maximum recursion depth (default: 3)
-        #[arg(long, default_value = "3", value_name = "N")]
-        depth: u32,
-
-        /// Limit to specific crate
-        #[arg(long, value_name = "CRATE")]
-        crate_name: Option<String>,
-
-        /// Maximum tokens in output (approximate, default: unlimited)
-        #[arg(long, value_name = "N")]
-        tokens: Option<usize>,
-
-        /// Output minimal representation (signatures only, no field details)
-        #[arg(long)]
-        minimal: bool,
 
         /// Output as JSON instead of human-readable text
         #[arg(long)]
@@ -191,6 +164,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
         }
         Commands::Query {
             path,
+            depth,
             crate_name,
             include,
             kind,
@@ -205,38 +179,12 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 _ => cli::query::QueryKindArg::All,
             };
 
-            QueryCommand::new(
-                path.clone(),
-                crate_name.clone(),
-                include.clone(),
-                kind,
-                *minimal,
-                *tokens,
-                *json,
-            )
-            .execute()
-            .map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("No cached index found") {
-                    AppError::NoCache
-                } else if msg.contains("No items found") {
-                    AppError::NotFound(path.clone())
-                } else {
-                    AppError::Other(e)
-                }
-            })
-        }
-        Commands::Expand {
-            path,
-            depth,
-            crate_name,
-            tokens,
-            minimal,
-            json,
-        } => {
+            // Always use expand (unified rendering)
+            // Default depth is 1 to show submodules, depth=0 shows just the type
+            let depth = if *depth == 0 { 1 } else { *depth };
             let mut cmd = ExpandCommand::from_args(
                 path.clone(),
-                *depth,
+                depth,
                 crate_name.clone(),
                 *tokens,
                 *minimal,

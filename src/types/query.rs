@@ -1,7 +1,7 @@
 // JSON output schema types for query responses
 
-use serde::Serialize;
 use serde::ser::SerializeSeq;
+use serde::Serialize;
 
 /// Top-level query response
 #[derive(Serialize, Debug, Clone)]
