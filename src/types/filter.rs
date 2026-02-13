@@ -859,7 +859,13 @@ mod integration_tests {
                 kind: kind.to_string(),
                 methods: vec![],
                 trait_implementations: vec![],
+                generic_params: None,
             }),
+            visibility: None,
+            generics: None,
+            is_deprecated: None,
+            deprecation_note: None,
+            attributes: vec![],
         }
     }
 
