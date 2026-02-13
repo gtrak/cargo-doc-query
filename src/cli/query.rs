@@ -188,9 +188,9 @@ impl Command for QueryCommand {
         let options = self.parse_options();
 
         // Execute query
-        let mut response = engine
+        let response = engine
             .query(&self.path, &options, self.crate_name.as_deref())
-            .context("Query failed")?;
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let duration = start.elapsed();
 

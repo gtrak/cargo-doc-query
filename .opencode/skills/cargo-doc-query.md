@@ -8,12 +8,7 @@ This skill allows the agent to query Rust crate documentation to understand APIs
 
 **Important:** This is the development version. Use the temporary entrypoint:
 ```
-cargo run --release -- <command> [args]
-```
-
-After installation with `cargo install`, use:
-```
-cargo doc-query <command> [args]
+cargo-doc-query <command> [args]
 ```
 
 ## Commands
@@ -21,28 +16,28 @@ cargo doc-query <command> [args]
 ### Query
 Query methods, traits, or modules for a type:
 ```
-cargo run --release -- query <path> [--crate-name <name>] [--minimal] [--tokens <n>]
+cargo-doc-query query <path> [--crate-name <name>] [--minimal] [--tokens <n>]
 ```
 
 Examples:
-- `cargo run --release -- query anyhow::Error`
-- `cargo run --release -- query anyhow --crate-name anyhow`
-- `cargo run --release -- query std::vec::Vec --minimal`
+- `cargo-doc-query query anyhow::Error`
+- `cargo-doc-query query anyhow --crate-name anyhow`
+- `cargo-doc-query query std::vec::Vec --minimal`
 
 ### Expand
 Expand a type or module recursively to see its hierarchy:
 ```
-cargo run --release -- expand <path> --depth <n> [--minimal] [--tokens <n>]
+cargo-doc-query expand <path> --depth <n> [--minimal] [--tokens <n>]
 ```
 
 Examples:
-- `cargo run --release -- expand anyhow::Error --depth 1`
-- `cargo run --release -- expand anyhow --depth 2 --crate-name anyhow`
+- `cargo-doc-query expand anyhow::Error --depth 1`
+- `cargo-doc-query expand anyhow --depth 2 --crate-name anyhow`
 
 ### Build
 Build the documentation index (run first):
 ```
-cargo run --release -- build
+cargo-doc-query build
 ```
 
 ## Flags
@@ -63,7 +58,7 @@ Use this skill when:
 
 ## Workflow
 
-1. **First time**: Run `cargo run --release -- build` to generate the index
+1. **First time**: Run `cargo-doc-query build` to generate the index
 2. **Query types**: Use `query` for specific types or modules
 3. **Explore hierarchies**: Use `expand` for recursive exploration
 4. **Use filters**: Add `--minimal` or `--tokens` to control output size
@@ -72,22 +67,22 @@ Use this skill when:
 
 All commands output JSON for easy parsing. Use `jq` for filtering:
 ```bash
-cargo run --release -- query anyhow::Error | jq '.matches[0].content'
+cargo-doc-query query anyhow::Error | jq '.matches[0].content'
 ```
 
 ## Common Patterns
 
 **Get all methods of a type:**
 ```
-cargo run --release -- query <Type> | jq '.matches[].content.methods'
+cargo-doc-query query <Type> | jq '.matches[].content.methods'
 ```
 
 **List module contents:**
 ```
-cargo run --release -- query <module_path> --crate-name <crate>
+cargo-doc-query query <module_path> --crate-name <crate>
 ```
 
 **Quick type info (minimal):**
 ```
-cargo run --release -- query <Type> --minimal
+cargo-doc-query query <Type> --minimal
 ```
