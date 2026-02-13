@@ -1,6 +1,6 @@
 # Project State: cargo-doc-query
 
-**Milestone:** v1.1 Output Refinement — Ready to build
+**Milestone:** v1.1 Output Refinement — In progress
 **Current Phase:** 6 (5 phases planned)
 **Status:** Requirements defined, roadmap created
 **Last Updated:** 2026-02-13
@@ -11,9 +11,11 @@
 ## Current Position
 
 **Phase:** 6 — Foundation (FilterEngine)
-**Plan:** —
-**Status:** Ready to start
-**Last activity:** 2026-02-13 — Milestone v1.1 roadmap created (5 phases, 25 requirements)
+**Plan:** 01 of 2 in current phase
+**Status:** In progress
+**Last activity:** 2026-02-13 — Completed 06-01-PLAN.md
+
+Progress: ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 20%
 
 ---
 
@@ -41,7 +43,7 @@
 
 | Phase | Status | Requirements | Key Deliverable |
 |-------|--------|--------------|-----------------|
-| 6. Foundation | ○ Pending | 7 | FilterEngine with glob matching |
+| 6. Foundation | 🔄 In Progress | 1/7 | FilterEngine with glob matching |
 | 7. CLI Integration | ○ Pending | 0 | Wire filters to CLI |
 | 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
 | 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
@@ -71,16 +73,24 @@ v1.1: Output refinement and UX improvements
 
 ### Recent Context
 
-Milestone v1.1 started with focus shift:
-- Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
-- Prioritizing rendering consistency and output refinement
-- Researching rustdoc JSON schema for missing fields
+Completed plan 06-01 for FilterEngine foundation:
+- Created FilterConfig struct with all filter fields
+- Implemented FilterEngine with pre-compiled pattern matching
+- Added comprehensive test suite (11 tests, all passing)
+- Successfully supports FILT-01 (--include), FILT-02 (--exclude), and FILT-07 (error messages)
+- v1.1 start with focus shift:
+  - Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
+  - Prioritizing rendering consistency and output refinement
+  - Researching rustdoc JSON schema for missing fields
 
 ### Accumulated Context
 
 **Decisions:**
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
+- FilterEngine uses glob@0.3.3 for pattern matching
+- Pre-compile patterns for performance
+- AND logic combining all filters
 
 **Blockers:** None
 
@@ -94,6 +104,7 @@ Milestone v1.1 started with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
+| Plans completed | 20/25 (80%) | 25 total |
 
 ---
 
