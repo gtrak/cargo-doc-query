@@ -1,7 +1,7 @@
 # Project State: cargo-doc-query
 
 **Milestone:** v1.1 Output Refinement — In progress
-**Current Phase:** 6 (5 phases planned)
+**Current Phase:** 7 (5 phases planned)
 **Status:** Requirements defined, roadmap created
 **Last Updated:** 2026-02-13
 **Roadmap:** `.planning/ROADMAP-v1.1.md`
@@ -10,12 +10,12 @@
 
 ## Current Position
 
-**Phase:** 6 — Foundation (FilterEngine)
-**Plan:** 3 of 2 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-02-13 — Completed 06-03-PLAN.md
+**Phase:** 7 — CLI Integration
+**Plan:** 1 of 1 in current phase
+**Status:** Plan complete
+**Last activity:** 2026-02-13 — Completed 07-01-SUMMARY.md
 
-Progress: ████████████████████████████████░░░░ 100%
+Progress: ████████████████████████████████████░ 95%
 
 ---
 
@@ -32,19 +32,19 @@ Progress: ███████████████████████�
 | 5. Integration & Polish | ✅ Complete | 5 | Error handling, progress bars, suggestions |
 
 **Stats:**
-- 19 plans completed
-- 187 tests passing
-- ~7,172 lines of Rust code
+- 21 plans completed
+- 212 tests passing
+- ~7,250 lines of Rust code
 - 2 days from start to ship
 
-### v1.1 Output Refinement (Ready — 5 phases)
+### v1.1 Output Refinement (In progress — 5 phases)
 
 **Focus:** Unified rendering, robust filtering, documentation support
 
 | Phase | Status | Requirements | Key Deliverable |
 |-------|--------|--------------|-----------------|
 | 6. Foundation | ✅ Complete | 2/2 | FilterEngine with glob matching, validation, stats |
-| 7. CLI Integration | ○ Pending | 0 | Wire filters to CLI |
+| 7. CLI Integration | ✅ Complete | 1/1 | Filter flags wired to CLI |
 | 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
 | 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
 | 10. Integration | ○ Pending | 0 | End-to-end validation |
@@ -86,6 +86,12 @@ Completed plan 06-02 for FilterEngine enhancement:
 - Integrated QueryMatch filtering with statistics collection
 - All filter tests passing (19 tests)
 
+Completed plan 07-01 for CLI integration:
+- Added filter flags to Commands::Query variant
+- Integrated FilterConfig into ExpandCommand struct
+- Created filter_config() method with --only precedence logic
+- All CLI filter flags ready for use in query execution
+
 v1.1 start with focus shift:
 - Deferred infrastructure goals (shared cache, stdlib, GC) to v2.0
 - Prioritizing rendering consistency and output refinement
@@ -99,6 +105,10 @@ v1.1 start with focus shift:
 - FilterEngine uses glob@0.3.3 for pattern matching
 - Pre-compile patterns for performance
 - AND logic combining all filters
+- CLI filter flags use Vec<String> for multiple values
+- --only takes precedence over --include for include patterns
+- --kind values are normalized to lowercase (case-insensitive matching)
+- crate_filter field name avoids Rust keyword conflict
 
 **Blockers:** None
 
