@@ -112,8 +112,9 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ## Phase 8: Result Type Extensions
 
-**Status:** 🟡 Planned — 5 plans in 3 waves ready for execution
+**Status:** ✅ Complete — 5 plans executed
 **Goal:** Enrich query results with visibility, deprecation, generics, attributes, and ABI metadata
+**Completion Date:** 2026-02-13
 
 **Phase Goal:** Users can see rich metadata for items including visibility modifiers, deprecation status, generic parameters, and key attributes.
 
@@ -148,13 +149,13 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ### Plans
 
-- [ ] **08-01**: Create DetailLevel enum and metadata extraction utilities (FIELD-01..05 foundation)
-- [ ] **08-02**: Extend QueryMatch, MethodOutput, TypeResult, TraitResult with new fields (FIELD-01..05, FIELD-07)
-- [ ] **08-03**: Extend TypeNode and ModuleItemInfo for expand command (FIELD-01..05 for expansion)
-- [ ] **08-04**: Add --detailed flag and wire DetailLevel through CLI (FIELD-08)
-- [ ] **08-05**: Update extraction functions to populate new fields (FIELD-06, integration)
+- [x] **08-01**: Create DetailLevel enum and metadata extraction utilities (FIELD-01..05 foundation)
+- [x] **08-02**: Extend QueryMatch, MethodOutput, TypeResult, TraitResult with new fields (FIELD-01..05, FIELD-07)
+- [x] **08-03**: Extend TypeNode and ModuleItemInfo for expand command (FIELD-01..05 for expansion)
+- [x] **08-04**: Add --detailed flag and wire DetailLevel through CLI (FIELD-08)
+- [x] **08-05**: Update extraction functions to populate new fields (FIELD-06, integration)
 
-**Plans created:** 2026-02-13 | **Ready for execution**
+**Plans created:** 2026-02-13 | **Executed:** 2026-02-13
 
 ### Deliverables
 
@@ -271,7 +272,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 |-------|--------|----------------|---------------------|
 | Phase 6 | ✅ Complete | 7 (FILT-01..07) | 4/4 |
 | Phase 7 | ✅ Complete | 0 (implements Phase 6) | 4/4 |
-| Phase 8 | 🟡 Planned | 8 (FIELD-01..08) | 0/8 |
+| Phase 8 | ✅ Complete | 8 (FIELD-01..08) | 8/8 |
 | Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 |
 | Phase 10 | 🔴 Not Started | 0 (integration) | 0/5 |
 
