@@ -117,7 +117,9 @@ impl TypeExpander {
         }
 
         // Try to find and expand the type in each loaded crate
-        let crate_keys: Vec<String> = self.crates.keys().cloned().collect();
+        // Sort keys for deterministic iteration order
+        let mut crate_keys: Vec<String> = self.crates.keys().cloned().collect();
+        crate_keys.sort();
         let mut found = false;
 
         for key in crate_keys {

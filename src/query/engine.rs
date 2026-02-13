@@ -139,16 +139,15 @@ impl QueryEngine {
     ) -> Result<QueryResponse> {
         let mut matches = Vec::new();
 
-        // Collect crate names to load first
-        let mut crates_to_load: Vec<(String, String)> = Vec::new();
-        for crate_node in &self.index.nodes {
-            if let Some(filter) = crate_filter {
-                if crate_node.name != filter {
-                    continue;
-                }
-            }
-            crates_to_load.push((crate_node.name.clone(), crate_node.version.clone()));
-        }
+        // Collect crate names to load first (sorted for deterministic order)
+        let mut crates_to_load: Vec<(String, String)> = self
+            .index
+            .nodes
+            .iter()
+            .filter(|n| crate_filter.map_or(true, |f| n.name == f))
+            .map(|n| (n.name.clone(), n.version.clone()))
+            .collect();
+        crates_to_load.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Load all crates first (to avoid borrowing issues)
         for (name, version) in &crates_to_load {
