@@ -20,13 +20,13 @@ Unified rendering across all item types and depths.
 
 Robust pattern-based filtering for precise queries.
 
-- [ ] **FILT-01**: `--include` flag accepts glob patterns for item paths
-- [ ] **FILT-02**: `--exclude` flag accepts glob patterns to filter out items
-- [ ] **FILT-03**: `--kind` flag filters by item kind (struct, enum, trait, function, etc.)
-- [ ] **FILT-04**: `--crate` flag restricts results to specific crate(s)
-- [ ] **FILT-05**: `--visibility` flag filters by visibility level (pub, pub(crate), etc.)
-- [ ] **FILT-06**: Multiple filter flags combine with AND logic
-- [ ] **FILT-07**: Invalid glob patterns produce helpful error messages
+- [x] **FILT-01**: `--include` flag accepts glob patterns for item paths [x] Phase 6
+- [x] **FILT-02**: `--exclude` flag accepts glob patterns to filter out items [x] Phase 6
+- [x] **FILT-03**: `--kind` flag filters by item kind (struct, enum, trait, function, etc.) [x] Phase 6
+- [x] **FILT-04**: `--crate` flag restricts results to specific crate(s) [x] Phase 6
+- [x] **FILT-05**: `--visibility` flag filters by visibility level (pub, pub(crate), etc.) [x] Phase 6
+- [x] **FILT-06**: Multiple filter flags combine with AND logic [x] Phase 6
+- [x] **FILT-07**: Invalid glob patterns produce helpful error messages [x] Phase 6
 
 ### Documentation (DOCS)
 
@@ -89,13 +89,13 @@ Explicitly excluded from v1.1.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | Phase 6 | Pending |
-| FILT-02 | Phase 6 | Pending |
-| FILT-03 | Phase 6 | Pending |
-| FILT-04 | Phase 6 | Pending |
-| FILT-05 | Phase 6 | Pending |
-| FILT-06 | Phase 6 | Pending |
-| FILT-07 | Phase 6 | Pending |
+| FILT-01 | Phase 6 | Complete |
+| FILT-02 | Phase 6 | Complete |
+| FILT-03 | Phase 6 | Complete |
+| FILT-04 | Phase 6 | Complete |
+| FILT-05 | Phase 6 | Complete |
+| FILT-06 | Phase 6 | Complete |
+| FILT-07 | Phase 6 | Complete |
 | FIELD-01 | Phase 8 | Pending |
 | FIELD-02 | Phase 8 | Pending |
 | FIELD-03 | Phase 8 | Pending |
