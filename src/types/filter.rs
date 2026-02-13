@@ -38,6 +38,8 @@
 
 use crate::types::query::{QueryContent, QueryMatch};
 use glob::Pattern;
+use thiserror::Error;
+use std::time::Instant;
 
 /// Configuration for filtering query results
 ///

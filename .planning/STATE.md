@@ -113,6 +113,7 @@ v1.1 start with focus shift:
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
 | Plans completed | 21/25 (84%) | 25 total |
+| Milestones complete | 1/1 | 1 in progress |
 
 ---
 
