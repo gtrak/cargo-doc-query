@@ -1,14 +1,29 @@
 // Recursive type expansion with cycle detection and token budgeting
 
-use anyhow::Result;
 use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use thiserror::Error;
 
 use crate::cache::store::SerializableIndex;
 use crate::query::lookup::PathResolver;
 use crate::types::expand::{ExpansionResult, FieldInfo, TokenConfig, TypeGraph, TypeNode};
+
+/// Errors that can occur during type expansion
+#[derive(Error, Debug)]
+pub enum ExpandError {
+    #[error("No cached index found. Run `cargo doc-query build` first.")]
+    NoCache,
+
+    #[error("No items found matching path: {0}")]
+    NotFound(String),
+
+    #[error("Expansion failed: {0}")]
+    Other(#[from] anyhow::Error),
+}
+
+pub type Result<T> = std::result::Result<T, ExpandError>;
 
 pub struct TypeExpander {
     index: SerializableIndex,
@@ -200,7 +215,7 @@ impl TypeExpander {
         }
 
         if graph.nodes.is_empty() {
-            return Err(anyhow::anyhow!("No items found matching path: {}", path));
+            return Err(ExpandError::NotFound(path.to_string()));
         }
 
         // Convert to minimal if requested
@@ -599,11 +614,11 @@ fn format_type_signature(ty: &rustdoc_types::Type) -> String {
 }
 
 pub fn expand_type(path: &str, depth: u32, crate_filter: Option<&str>) -> Result<ExpansionResult> {
-    let index = crate::cache::store::CacheStore::new()?
-        .load_current()?
-        .ok_or_else(|| {
-            anyhow::anyhow!("No cached index found. Run `cargo doc-query build` first.")
-        })?;
+    let index = crate::cache::store::CacheStore::new()
+        .map_err(|e| ExpandError::Other(e.into()))?
+        .load_current()
+        .map_err(|e| ExpandError::Other(e.into()))?
+        .ok_or(ExpandError::NoCache)?;
 
     let mut expander = TypeExpander::new(index, depth);
     expander.expand(path, crate_filter)
@@ -615,11 +630,11 @@ pub fn expand_type_with_config(
     crate_filter: Option<&str>,
     config: TokenConfig,
 ) -> Result<ExpansionResult> {
-    let index = crate::cache::store::CacheStore::new()?
-        .load_current()?
-        .ok_or_else(|| {
-            anyhow::anyhow!("No cached index found. Run `cargo doc-query build` first.")
-        })?;
+    let index = crate::cache::store::CacheStore::new()
+        .map_err(|e| ExpandError::Other(e.into()))?
+        .load_current()
+        .map_err(|e| ExpandError::Other(e.into()))?
+        .ok_or(ExpandError::NoCache)?;
 
     let mut expander = TypeExpander::with_config(index, depth, config);
     expander.expand(path, crate_filter)

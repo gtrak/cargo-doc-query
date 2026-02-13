@@ -14,6 +14,7 @@ use crate::parser::validate::validate_format_version;
 pub struct BuildCommand {
     manifest_path: PathBuf,
     all_features: bool,
+    quiet: bool,
 }
 
 impl BuildCommand {
@@ -21,12 +22,22 @@ impl BuildCommand {
         Self {
             manifest_path,
             all_features,
+            quiet: false,
         }
+    }
+
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.quiet = quiet;
     }
 
     /// Create a progress bar with a nice style
     fn create_progress_bar(&self, len: u64, msg: &str) -> ProgressBar {
         let pb = ProgressBar::new(len);
+        if self.quiet {
+            pb.set_style(ProgressStyle::default_bar().template("").unwrap());
+            pb.finish_and_clear();
+            return pb;
+        }
         pb.set_style(
             ProgressStyle::default_bar()
                 .template(
@@ -43,6 +54,11 @@ impl BuildCommand {
     /// Create a spinner for indeterminate progress
     fn create_spinner(&self, msg: &str) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
+        if self.quiet {
+            pb.set_style(ProgressStyle::default_spinner().template("").unwrap());
+            pb.finish_and_clear();
+            return pb;
+        }
         pb.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
@@ -485,6 +501,14 @@ impl Command for BuildCommand {
         let deps = crate::cargo::dependencies::get_workspace_dependencies(&self.manifest_path)
             .context("Failed to get workspace dependencies")?;
         deps_spinner.finish_with_message(format!("Found {} external dependencies", deps.len()));
+
+        // Check if there are any dependencies
+        if deps.is_empty() {
+            return Err(anyhow::anyhow!(
+                "This project has no external dependencies. cargo-doc-query requires dependencies to index.\n\
+                Add dependencies to your Cargo.toml and run `cargo doc-query build` again."
+            ));
+        }
 
         // 2. Generate cache key from project inputs (CACHE-01)
         let key_spinner = self.create_spinner("Computing cache key...");

@@ -31,6 +31,10 @@ pub struct ExpandCommand {
     /// Output as JSON instead of human-readable text
     #[arg(long)]
     pub json: bool,
+
+    /// Suppress progress indicators and timing info
+    #[arg(skip)]
+    pub quiet: bool,
 }
 
 impl ExpandCommand {
@@ -42,6 +46,7 @@ impl ExpandCommand {
             tokens: None,
             minimal: false,
             json: false,
+            quiet: false,
         }
     }
 
@@ -60,7 +65,13 @@ impl ExpandCommand {
             tokens,
             minimal,
             json: false,
+            quiet: false,
         }
+    }
+
+    /// Set quiet mode
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.quiet = quiet;
     }
 }
 
@@ -93,7 +104,9 @@ impl Command for ExpandCommand {
         let index = if let Some(current_index) = cache_store.load_current()? {
             // Compare cache keys
             if current_index.cache_key != expected_key {
-                println!("Manifest changed, rebuilding index...");
+                if !self.quiet {
+                    println!("Manifest changed, rebuilding index...");
+                }
                 let build_cmd = crate::cli::build::BuildCommand::new(
                     manifest_path.with_file_name("Cargo.toml"),
                     false,
@@ -108,7 +121,9 @@ impl Command for ExpandCommand {
             }
         } else {
             // No cache exists, need to build
-            println!("No index found, building...");
+            if !self.quiet {
+                println!("No index found, building...");
+            }
             let build_cmd = crate::cli::build::BuildCommand::new(
                 manifest_path.with_file_name("Cargo.toml"),
                 false,
@@ -120,7 +135,9 @@ impl Command for ExpandCommand {
                 .ok_or_else(|| anyhow::anyhow!("No cached index found after build"))?
         };
 
-        println!("Loaded index ({} crates)", index.nodes.len());
+        if !self.quiet {
+            println!("Loaded index ({} crates)", index.nodes.len());
+        }
 
         // Create token config
         let token_config = TokenConfig::new()
@@ -142,19 +159,21 @@ impl Command for ExpandCommand {
         let duration = start.elapsed();
 
         // Print warnings if budget exceeded
-        if expansion.budget_exceeded {
+        if expansion.budget_exceeded && !self.quiet {
             eprintln!("⚠ Warning: Token budget exceeded. Some types were truncated.");
             if !expansion.truncated_paths.is_empty() {
                 eprintln!("  Truncated: {:?}", expansion.truncated_paths);
             }
         }
 
-        // Print token count and timing to stderr
-        eprintln!(
-            "Expansion completed in {}ms ({} tokens)",
-            duration.as_millis(),
-            expansion.token_count
-        );
+        // Print token count and timing to stderr (unless quiet)
+        if !self.quiet {
+            eprintln!(
+                "Expansion completed in {}ms ({} tokens)",
+                duration.as_millis(),
+                expansion.token_count
+            );
+        }
 
         // Output based on format preference
         if self.json {

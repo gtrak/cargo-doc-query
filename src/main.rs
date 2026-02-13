@@ -16,6 +16,18 @@ use cli::Command;
 use error::errors::AppError;
 use std::process::ExitCode;
 
+/// Global configuration shared across all commands
+pub struct GlobalConfig {
+    pub no_color: bool,
+    pub quiet: bool,
+}
+
+impl GlobalConfig {
+    pub fn new(no_color: bool, quiet: bool) -> Self {
+        Self { no_color, quiet }
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "cargo-doc-query")]
 #[command(version = "0.1.0")]
@@ -64,6 +76,14 @@ struct Cli {
     /// Include all features when generating documentation
     #[arg(long)]
     all_features: bool,
+
+    /// Disable colored output (useful for CI or piping)
+    #[arg(long, global = true)]
+    no_color: bool,
+
+    /// Suppress progress indicators and timing info
+    #[arg(short, long, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -133,6 +153,19 @@ enum Commands {
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    // Apply global flags
+    if cli.no_color {
+        console::set_colors_enabled(false);
+    }
+
+    // Set up Ctrl+C handler for graceful shutdown
+    if let Err(e) = ctrlc::set_handler(move || {
+        eprintln!("\nInterrupted");
+        std::process::exit(130);
+    }) {
+        eprintln!("Warning: Failed to set Ctrl+C handler: {}", e);
+    }
+
     match run(cli) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
@@ -143,6 +176,9 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<(), AppError> {
+    let quiet = cli.quiet;
+    let _no_color = cli.no_color;
+
     match &cli.command {
         Commands::Build => {
             // Convert manifest path to absolute path and resolve to Cargo.toml if needed
@@ -158,21 +194,22 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 manifest_path.push("Cargo.toml");
             }
 
-            BuildCommand::new(manifest_path, cli.all_features)
-                .execute()
+            let mut cmd = BuildCommand::new(manifest_path, cli.all_features);
+            cmd.set_quiet(quiet);
+            cmd.execute()
                 .map_err(|e| AppError::BuildFailed(e.to_string()))
         }
         Commands::Query {
             path,
             depth,
             crate_name,
-            include,
+            include: _,
             kind,
             minimal,
             tokens,
             json,
         } => {
-            let kind = match kind.to_lowercase().as_str() {
+            let _kind = match kind.to_lowercase().as_str() {
                 "methods" => cli::query::QueryKindArg::Methods,
                 "traits" => cli::query::QueryKindArg::Traits,
                 "types" => cli::query::QueryKindArg::Types,
@@ -190,16 +227,50 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 *minimal,
             );
             cmd.json = *json;
-            cmd.execute().map_err(|e| {
-                let msg = e.to_string();
-                if msg.contains("No cached index found") {
-                    AppError::NoCache
-                } else if msg.contains("No items found") {
-                    AppError::NotFound(path.clone())
-                } else {
-                    AppError::Other(e)
+            cmd.quiet = quiet;
+            match cmd.execute() {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    // Downcast to check for specific error types
+                    if let Some(expand_err) = e.downcast_ref::<crate::query::expand::ExpandError>()
+                    {
+                        match expand_err {
+                            crate::query::expand::ExpandError::NoCache => Err(AppError::NoCache),
+                            crate::query::expand::ExpandError::NotFound(p) => {
+                                // Show suggestions for similar types
+                                if !quiet && !json {
+                                    if let Ok(suggestions) = suggest_similar_types(&path) {
+                                        if !suggestions.is_empty() {
+                                            eprintln!("\nDid you mean:");
+                                            for suggestion in suggestions {
+                                                eprintln!("  • {}", suggestion);
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(AppError::NotFound(p.clone()))
+                            }
+                            crate::query::expand::ExpandError::Other(_) => Err(AppError::Other(e)),
+                        }
+                    } else {
+                        Err(AppError::Other(e))
+                    }
                 }
-            })
+            }
         }
+    }
+}
+
+/// Find similar type names to suggest when a query fails
+fn suggest_similar_types(path: &str) -> anyhow::Result<Vec<String>> {
+    use crate::cache::store::CacheStore;
+
+    let cache_store = CacheStore::new()?;
+
+    if let Some(index) = cache_store.load_current()? {
+        let suggestions = crate::query::suggest::find_similar_types(&index, path, 5);
+        Ok(suggestions)
+    } else {
+        Ok(vec![])
     }
 }

@@ -5,11 +5,31 @@ use console::style;
 
 /// Format a query response as human-readable text
 pub fn format_query_response(response: &QueryResponse, query_path: &str) {
+    format_query_response_with_suggestions(response, query_path, None)
+}
+
+/// Format a query response with optional suggestions
+pub fn format_query_response_with_suggestions(
+    response: &QueryResponse,
+    query_path: &str,
+    suggestions: Option<&[String]>,
+) {
     if response.matches.is_empty() {
         println!(
             "{}",
             style(format!("No results found for: {}", query_path)).red()
         );
+
+        // Show suggestions if provided
+        if let Some(sugs) = suggestions {
+            if !sugs.is_empty() {
+                println!("\nDid you mean:");
+                for suggestion in sugs {
+                    println!("  • {}", style(suggestion).yellow());
+                }
+            }
+        }
+
         return;
     }
 

@@ -1,16 +1,16 @@
 # Project State: cargo-doc-query
 
-**Current Phase:** 4 — Advanced Features (Recursive Expansion & Token Budgets)
+**Current Phase:** 5 — Integration & Polish
 **Phase Status:** ✅ Complete
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-13
 
 ---
 
 ## Current Position
 
-**Completed:** Phase 4 — Advanced Features ✅
-**Working on:** Phase 5 — Integration & Polish (ready to start)
-**Next milestone:** Production-ready CLI with comprehensive error handling and shell integration
+**Completed:** Phase 5 — Integration & Polish ✅
+**Working on:** Phase 5 — Integration & Polish (complete, ready for UAT)
+**Next milestone:** User acceptance testing before completing milestone
 
 ### Phase 1 Progress
 
@@ -95,9 +95,9 @@
 
 ## Active Plan
 
-**Plan:** 03-02 - [TODO] Parallel query execution
-**Status:** Planned, ready for execution
-**Last activity:** 2026-02-12 - Completed 03-01-SUMMARY.md
+**Plan:** Phase 5 Complete - Ready for UAT
+**Status:** ✅ Complete (all 5 plans)
+**Last activity:** 2026-02-13 - Completed Phase 5 with retroactive plans and missing features
 
 ### Completed Plans
 
@@ -111,6 +111,11 @@
 | 04-01 | Recursive type expansion | 7f2c3c8 | Expand command with --depth, cycle detection, field extraction |
 | 04-02 | Token budgets & minimal mode | 0884afb | --tokens and --minimal flags for expand command |
 | 04-03 | Query integration | a816fcd | --tokens and --minimal flags for query command |
+| 05-01 | Error handling & exit codes | HEAD | 9 error types with exit codes, comprehensive error messages |
+| 05-02 | Progress indicators | HEAD | indicatif spinners/progress bars, --quiet and --no-color flags |
+| 05-03 | Help text & documentation | HEAD | Comprehensive --help, agent skill definition |
+| 05-04 | Edge case handling | HEAD | Auto-rebuild, suggestions, corrupt cache detection, Ctrl+C handling |
+| 05-05 | Module expansion | HEAD | Module exploration, function signatures, re-export handling |
 
 ### Completed Tasks (All Plans)
 

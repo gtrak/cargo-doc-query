@@ -4,3 +4,4 @@ pub mod engine;
 pub mod expand;
 pub mod format;
 pub mod lookup;
+pub mod suggest;

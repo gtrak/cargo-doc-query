@@ -24,6 +24,9 @@ serde = { version = "1.0.228", features = ["derive"] }
 indicatif = "0.17"
 console = "0.15"
 
+# Signal handling
+ctrlc = "3.4"
+
 # Testing dependencies
 proptest = "1.4"
 tempfile = "3.25"

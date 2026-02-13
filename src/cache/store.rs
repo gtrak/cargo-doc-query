@@ -69,6 +69,8 @@ impl CacheStore {
     }
 
     /// Try to load index from cache
+    /// Returns None if cache doesn't exist
+    /// Returns CacheError if cache exists but is corrupt (should trigger rebuild)
     pub fn load(&self, cache_key: &str) -> Result<Option<SerializableIndex>> {
         let path = self.cache_dir.join(format!("{}.idx", cache_key));
 
@@ -78,9 +80,19 @@ impl CacheStore {
 
         let data = std::fs::read(&path).context("Failed to read cache file")?;
 
-        let index = from_bytes(&data).context("Failed to deserialize index")?;
-
-        Ok(Some(index))
+        // Try to deserialize - if it fails, cache is corrupt
+        match from_bytes(&data) {
+            Ok(index) => Ok(Some(index)),
+            Err(e) => {
+                // Log the corrupt cache file and delete it
+                eprintln!(
+                    "⚠ Warning: Cache file appears corrupt ({}), will rebuild...",
+                    e
+                );
+                let _ = std::fs::remove_file(&path);
+                Ok(None)
+            }
+        }
     }
 
     /// Load the most recent index from cache (latest cache file)
@@ -120,8 +132,19 @@ impl CacheStore {
             None => Ok(None),
             Some(latest_path) => {
                 let data = std::fs::read(&latest_path).context("Failed to read cache file")?;
-                let index = from_bytes(&data).context("Failed to deserialize index")?;
-                Ok(Some(index))
+                // Try to deserialize - if it fails, cache is corrupt
+                match from_bytes(&data) {
+                    Ok(index) => Ok(Some(index)),
+                    Err(e) => {
+                        // Log the corrupt cache file and delete it
+                        eprintln!(
+                            "⚠ Warning: Cache file appears corrupt ({}), will rebuild...",
+                            e
+                        );
+                        let _ = std::fs::remove_file(&latest_path);
+                        Ok(None)
+                    }
+                }
             }
         }
     }

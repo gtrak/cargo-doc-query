@@ -46,6 +46,10 @@ pub struct QueryCommand {
     /// Output as JSON instead of human-readable text
     #[arg(long)]
     json: bool,
+
+    /// Suppress progress indicators and timing info
+    #[arg(skip)]
+    pub quiet: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +106,12 @@ impl QueryCommand {
             minimal,
             tokens,
             json,
+            quiet: false,
         }
+    }
+
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.quiet = quiet;
     }
 
     fn parse_options(&self) -> QueryOptions {
@@ -484,7 +493,9 @@ impl Command for QueryCommand {
         let index = if let Some(current_index) = cache_store.load_current()? {
             // Compare cache keys
             if current_index.cache_key != expected_key {
-                println!("Manifest changed, rebuilding index...");
+                if !self.quiet {
+                    println!("Manifest changed, rebuilding index...");
+                }
                 let build_cmd = BuildCommand::new(
                     manifest_path.with_file_name("Cargo.toml"),
                     false, // Use default features
@@ -501,7 +512,9 @@ impl Command for QueryCommand {
             }
         } else {
             // No cache exists, need to build
-            println!("No index found, building...");
+            if !self.quiet {
+                println!("No index found, building...");
+            }
             let build_cmd = BuildCommand::new(
                 manifest_path.with_file_name("Cargo.toml"),
                 false, // Use default features
@@ -513,12 +526,23 @@ impl Command for QueryCommand {
                 .ok_or_else(|| anyhow::anyhow!("No cached index found after build"))?
         };
 
-        println!("Loaded index ({} crates)", index.nodes.len());
+        if !self.quiet {
+            println!("Loaded index ({} crates)", index.nodes.len());
+        }
 
         // Time the query execution
         let start = Instant::now();
 
-        // Create query engine
+        // Generate suggestions before moving index
+        let suggestions = if self.json {
+            None
+        } else {
+            Some(crate::query::suggest::find_similar_types(
+                &index, &self.path, 5,
+            ))
+        };
+
+        // Create query engine (takes ownership of index)
         let mut engine = QueryEngine::new(index);
 
         // Parse options
@@ -534,18 +558,20 @@ impl Command for QueryCommand {
         // Check token budget if set
         if let Some(budget) = self.tokens {
             let token_count = response.estimate_tokens();
-            if token_count > budget {
+            if token_count > budget && !self.quiet {
                 eprintln!(
                     "⚠ Warning: Token budget exceeded ({} > {} tokens)",
                     token_count, budget
                 );
             }
-            eprintln!(
-                "Query completed in {}ms ({} tokens)",
-                duration.as_millis(),
-                token_count
-            );
-        } else {
+            if !self.quiet {
+                eprintln!(
+                    "Query completed in {}ms ({} tokens)",
+                    duration.as_millis(),
+                    token_count
+                );
+            }
+        } else if !self.quiet {
             eprintln!("Query completed in {}ms", duration.as_millis());
         }
 
@@ -556,8 +582,13 @@ impl Command for QueryCommand {
                 .context("Failed to serialize response as JSON")?;
             println!("{}", json_output);
         } else {
-            // Output human-readable text
-            crate::format::text::format_query_response(&response, &self.path);
+            // Output human-readable text with suggestions
+            let suggestions_ref = suggestions.as_deref();
+            crate::format::text::format_query_response_with_suggestions(
+                &response,
+                &self.path,
+                suggestions_ref,
+            );
         }
 
         Ok(())
