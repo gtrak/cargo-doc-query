@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::cache::store::SerializableIndex;
+use crate::parser::serde_helper::deserialize_with_stack;
 use crate::query::lookup::PathResolver;
 use crate::types::expand::{ExpansionResult, FieldInfo, TokenConfig, TypeGraph, TypeNode};
 
@@ -91,7 +92,7 @@ impl TypeExpander {
             )
         })?;
 
-        let krate: Crate = serde_json::from_str(&json_str).map_err(|e| {
+        let krate: Crate = deserialize_with_stack(&json_str).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to parse rustdoc JSON from {}: {}",
                 json_path.display(),

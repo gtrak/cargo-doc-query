@@ -8,6 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::cache::store::SerializableIndex;
+use crate::parser::serde_helper::deserialize_with_stack;
 use crate::query::format::TypeFormatter;
 use crate::query::lookup::PathResolver;
 use crate::types::doc::DocExtractor;
@@ -150,7 +151,7 @@ impl QueryEngine {
         let json_str = fs::read_to_string(&json_path)
             .with_context(|| format!("Failed to read rustdoc JSON from {}", json_path.display()))?;
 
-        let krate: Crate = serde_json::from_str(&json_str).with_context(|| {
+        let krate: Crate = deserialize_with_stack(&json_str).with_context(|| {
             format!("Failed to parse rustdoc JSON from {}", json_path.display())
         })?;
 

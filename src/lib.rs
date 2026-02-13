@@ -4,6 +4,7 @@
 pub mod cache;
 pub mod error;
 pub mod format;
+pub mod parser;
 pub mod query;
 pub mod types;
 
