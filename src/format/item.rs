@@ -5,6 +5,7 @@
 
 use rustdoc_types::{Item, ItemEnum};
 
+use crate::format::doc::DocHandler;
 use crate::types::detail::{
     extract_deprecation_info, extract_semantic_attrs, visibility_to_string, DetailLevel,
 };
@@ -103,11 +104,10 @@ impl ItemFormatter {
             None
         };
 
-        let docs = if self.detail_level.is_minimal() {
-            None
-        } else {
-            item.docs.as_ref().map(|s| s.trim().to_string())
-        };
+        // Extract docs using DocHandler (respects DetailLevel and token budget)
+        let doc_handler = DocHandler::new(self.detail_level, self.token_budget);
+        let raw_docs = DocHandler::extract_docs(item);
+        let docs = raw_docs.and_then(|d| doc_handler.format_docs(&d));
         let (is_deprecated, deprecation_note) = if self.detail_level.includes_deprecation() {
             extract_deprecation_info(item.deprecation.as_ref())
                 .map(|(b, n)| (b, n))
