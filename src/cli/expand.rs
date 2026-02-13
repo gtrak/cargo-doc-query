@@ -8,6 +8,11 @@ use crate::cli::Command;
 use crate::types::expand::TokenConfig;
 use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
 
+/// Check if a visibility string is valid
+fn is_valid_visibility(vis: &str) -> bool {
+    matches!(vis, "pub" | "pub(crate)" | "pub(super)" | "private") || vis.starts_with("pub(in ")
+}
+
 #[derive(Parser, Debug)]
 pub struct ExpandCommand {
     /// The type path to expand (e.g., anyhow::Error)
@@ -83,6 +88,7 @@ impl ExpandCommand {
             crate_filter: Vec::new(),
             visibility: Vec::new(),
             only: None,
+            help_filters: false,
         }
     }
 
@@ -118,7 +124,6 @@ impl ExpandCommand {
             help_filters,
         }
     }
-    }
 
     /// Set quiet mode
     pub fn set_quiet(&mut self, quiet: bool) {
@@ -133,44 +138,62 @@ impl ExpandCommand {
         // Check for --include and --only both being specified
         if !self.include.is_empty() && self.only.is_some() {
             anyhow::bail!(
-                "Cannot use --include with --only. --only is shorthand for 'include this and exclude everything else'."
+                "Cannot use --include with --only.\n\n\
+                --only is shorthand for 'include this and exclude everything else'.\n\
+                Use either:\n\
+                  --only 'pattern'          (include only matching items)\n\
+                Or:\n\
+                  --include 'pattern'       (include matching items alongside others)\n\n\
+                For more help, run: cargo doc-query query --help-filters"
             );
         }
 
         // Validate visibility values
-        let valid_visibilities = ["pub", "pub(crate)", "pub(super)", "private"];
         for vis in &self.visibility {
-            if !valid_visibilities.contains(&vis.as_str()) {
+            if !is_valid_visibility(vis) {
                 anyhow::bail!(
-                    "Invalid visibility value '{}'. Valid options: {}",
-                    vis,
-                    valid_visibilities.join(", ")
+                    "Invalid visibility value '{}'\n\n\
+                    Valid options:\n\
+                      pub, pub(crate), pub(super), pub(in path), private\n\n\
+                    Example: --visibility pub\n\n\
+                    For more help, run: cargo doc-query query --help-filters",
+                    vis
                 );
             }
         }
 
-        // Detect contradictory patterns (e.g., include and exclude the same pattern)
-        let include_patterns: std::collections::HashSet<String> = self.include.iter().cloned().collect();
-        let exclude_patterns: std::collections::HashSet<String> = self.exclude.iter().cloned().collect();
-
-        // Check for same pattern in both include and exclude
-        for pattern in &include_patterns {
-            if exclude_patterns.contains(pattern) {
-                println!("Warning: Pattern '{}' appears in both --include and --exclude. Exclude takes precedence.");
+        // Check for same pattern in both include and exclude (warning only)
+        for pattern in &self.include {
+            if self.exclude.contains(pattern) {
+                eprintln!(
+                    "Warning: Pattern '{}' appears in both --include and --exclude. Exclude takes precedence.",
+                    pattern
+                );
             }
         }
 
-        // Check for completely contradictory patterns (no overlap)
-        if !self.include.is_empty() && !self.exclude.is_empty() {
-            // Determine if any pattern would match anything
-            // (Simplified check - in practice, glob patterns are complex)
-            let has_overlap = !self.include.iter().all(|p| self.exclude.iter().any(|ex| p == ex));
+        // Check for completely contradictory patterns (same pattern in both)
+        // This is different from overlapping - this is exact match
+        let exact_conflicts: Vec<_> = self
+            .include
+            .iter()
+            .filter(|p| self.exclude.contains(p))
+            .collect();
 
-            if !has_overlap {
-                println!(
-                    "Warning: Your filter patterns have no overlap. Consider reviewing your patterns to ensure you're filtering something."
-                );
-            }
+        if !exact_conflicts.is_empty() {
+            anyhow::bail!(
+                "Contradictory filter patterns detected.\n\n\
+                The following patterns appear in both --include and --exclude:\n\
+                {}\n\n\
+                An item cannot be both included and excluded.\n\
+                Remove conflicting patterns or use --only for exclusive filtering.\n\n\
+                For filter syntax help, run: cargo doc-query query --help-filters",
+                exact_conflicts
+                    .iter()
+                    .map(|p| format!("  - {}", p))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
         }
 
         Ok(())
@@ -180,10 +203,10 @@ impl ExpandCommand {
     ///
     /// If --only is specified, it takes precedence over --include.
     /// Otherwise, --include is used as the include pattern.
-    fn filter_config(&self) -> FilterConfig {
+    fn filter_config(&self) -> crate::types::filter::FilterConfig {
         let include_pattern = self.only.as_ref().map(|s| s.as_str());
 
-        let mut config = FilterConfig::default();
+        let mut config = crate::types::filter::FilterConfig::default();
         if let Some(pattern) = include_pattern {
             config = config.with_include(pattern.to_string());
         } else {
@@ -210,10 +233,19 @@ impl ExpandCommand {
 
         config
     }
-}
 
-impl Command for ExpandCommand {
-    fn execute(&self) -> Result<()> {
+    /// Check if any filter flags are configured
+    fn has_filters(&self) -> bool {
+        !self.include.is_empty()
+            || !self.exclude.is_empty()
+            || !self.kind.is_empty()
+            || !self.crate_filter.is_empty()
+            || !self.visibility.is_empty()
+            || self.only.is_some()
+    }
+
+    /// Validate filter arguments and return any errors
+    pub fn execute(&self) -> Result<()> {
         // Display glob syntax help if requested
         if self.help_filters {
             self.display_glob_syntax_help();
@@ -294,7 +326,7 @@ impl Command for ExpandCommand {
         let start = Instant::now();
 
         // Use expand_type_with_config for token budgeting
-        let expansion = crate::query::expand::expand_type_with_config(
+        let mut expansion = crate::query::expand::expand_type_with_config(
             &self.path,
             self.depth,
             self.crate_name.as_deref(),
@@ -322,8 +354,9 @@ impl Command for ExpandCommand {
         }
 
         // Apply filters if configured
-        if let Some(filtered_result) = self.apply_filters(expansion) {
-            expansion = filtered_result;
+        let config = self.filter_config();
+        if self.has_filters() {
+            self.apply_filters(&mut expansion);
         }
 
         // Output based on format preference
@@ -340,35 +373,57 @@ impl Command for ExpandCommand {
         Ok(())
     }
 
-    /// Apply filters to expansion results
-    fn apply_filters(
-        &self,
-        mut expansion: crate::types::expand::ExpansionResult,
-    ) -> Option<crate::types::expand::ExpansionResult> {
+    /// Apply filters to expansion results (mutates in place)
+    fn apply_filters(&self, expansion: &mut crate::types::expand::ExpansionResult) {
         // Get filter configuration from CLI args
         let config = self.filter_config();
 
         // Only apply filters if any are configured
-        if !config.has_filters() {
-            return None;
+        if !self.has_filters() {
+            return;
         }
 
         // Compile filter engine
         let engine = match FilterEngine::compile(&config) {
             Ok(e) => e,
             Err(FilterError::InvalidGlob { pattern, message }) => {
-                eprintln!("Error: Invalid glob pattern '{}': {}", pattern, message);
-                eprintln!("  Run `cargo doc-query query --help-filters` for syntax help.");
-                return None;
+                eprintln!("Error: Invalid glob pattern '{}'", pattern);
+                eprintln!();
+                eprintln!("The pattern is not valid: {}", message);
+                eprintln!();
+                eprintln!("Example of a valid pattern: 'std::vec::*'");
+                eprintln!();
+                eprintln!("For glob syntax reference, run:");
+                eprintln!("  cargo doc-query query --help-filters");
+                return;
             }
             Err(FilterError::EmptyPattern) => {
-                eprintln!("Error: Empty pattern provided to filter.");
-                eprintln!("  Check your filter arguments for empty strings.");
-                return None;
+                eprintln!("Error: Empty filter pattern");
+                eprintln!();
+                eprintln!("Filter patterns cannot be empty. Check your --include, --exclude, or --only flags.");
+                eprintln!();
+                eprintln!("Example: --include \"std::*\"");
+                eprintln!();
+                eprintln!("For filter syntax help, run:");
+                eprintln!("  cargo doc-query query --help-filters");
+                return;
+            }
+            Err(FilterError::ConflictingFilters { item }) => {
+                eprintln!("Error: Conflicting filter patterns");
+                eprintln!();
+                eprintln!(
+                    "The item '{}' matches both include and exclude patterns.",
+                    item
+                );
+                eprintln!("Review your --include and --exclude flags to resolve the conflict.");
+                return;
             }
             Err(e) => {
                 eprintln!("Error: Failed to compile filters: {}", e);
-                return None;
+                eprintln!();
+                eprintln!("For filter syntax help, run:");
+                eprintln!("  cargo doc-query query --help-filters");
+                return;
             }
         };
 
@@ -376,15 +431,16 @@ impl Command for ExpandCommand {
         let (filtered_nodes, stats) = engine.filter_with_stats(&expansion.graph.nodes);
 
         // Update expansion with filtered nodes
-        expansion.graph.nodes = filtered_nodes.into_iter().map(|node| *node).collect();
+        expansion.graph.nodes = filtered_nodes
+            .into_iter()
+            .map(|node| node.clone())
+            .collect();
 
         // Display stats if not in quiet mode
         if !self.quiet {
             println!();
             println!("{}", stats.summary());
         }
-
-        Some(expansion)
     }
 
     /// Display glob pattern syntax help
