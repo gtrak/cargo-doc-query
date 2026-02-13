@@ -7,7 +7,6 @@ edition = "2024"
 
 # rustdoc ecosystem dependencies
 rustdoc-types = "0.57"
-rustdoc-json = "0.9"
 cargo_metadata = "0.19"
 petgraph = "0.7"
 postcard = { version = "1.1", features = ["use-std"] }

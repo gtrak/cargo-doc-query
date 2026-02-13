@@ -2,9 +2,8 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
-use rustdoc_json::Builder;
-use std::panic;
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
 use crate::cache::key::CacheKeyInputs;
@@ -55,66 +54,6 @@ impl BuildCommand {
         pb
     }
 
-    fn find_cached_json(&self, package_name: &str, package_version: &str) -> Option<PathBuf> {
-        // Convert package name to file name format (e.g., "serde_json" -> "serde_json")
-        let json_name = package_name.replace("-", "_");
-
-        // Search in ~/.cargo/registry/src for pre-generated JSON
-        let cargo_home = std::env::var("CARGO_HOME")
-            .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.cargo", h)))
-            .unwrap_or_else(|_| String::from("~/.cargo"));
-
-        let registry_src = PathBuf::from(cargo_home).join("registry/src");
-
-        if !registry_src.exists() {
-            return None;
-        }
-
-        // Look for the crate directory matching the name and version
-        // Pattern: registry/src/*/package-name-version/target/doc/package_name.json
-        if let Ok(entries) = std::fs::read_dir(&registry_src) {
-            for entry in entries.flatten() {
-                if let Ok(crates) = std::fs::read_dir(entry.path()) {
-                    for crate_entry in crates.flatten() {
-                        let crate_path = crate_entry.path();
-                        let crate_name = crate_path.file_name()?.to_str()?;
-
-                        // Check if this directory matches our package
-                        if crate_name.starts_with(&format!("{}-{}", package_name, package_version))
-                            || crate_name.starts_with(&format!(
-                                "{}-{}",
-                                package_name.replace("-", "_"),
-                                package_version
-                            ))
-                        {
-                            let json_path = crate_path
-                                .join("target/doc")
-                                .join(format!("{}.json", json_name));
-                            if json_path.exists() {
-                                // Verify format version is compatible
-                                if let Ok(content) = std::fs::read_to_string(&json_path) {
-                                    if let Ok(format_version) =
-                                        Self::extract_format_version(&content)
-                                    {
-                                        if format_version == 57 {
-                                            // Current supported version
-                                            return Some(json_path);
-                                        } else {
-                                            eprintln!("⚠ Cached JSON for {} has format version {}, expected 57 (will regenerate)",
-                                                package_name, format_version);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     /// Extract format version from JSON content without full parsing
     fn extract_format_version(json_content: &str) -> Result<u32> {
         // Quick extraction: find "format_version":N pattern
@@ -136,176 +75,123 @@ impl BuildCommand {
         Err(anyhow::anyhow!("format_version not found in JSON"))
     }
 
+    /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
+    /// This generates JSON for the workspace, all dependencies, AND stdlib in one command
     fn generate_rustdoc_json(
         &self,
-        deps: &[(String, String, Utf8PathBuf)], // External dependencies with manifest paths
+        _deps: &[(String, String, Utf8PathBuf)],
     ) -> Result<Vec<(String, String, PathBuf)>> {
-        let mut paths = Vec::new();
-        let mut need_generation = Vec::new();
+        let output_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("target/doc");
 
-        // Progress bar for checking cache
-        let cache_pb = self.create_progress_bar(deps.len() as u64, "Checking cache");
+        println!("Generating rustdoc JSON via cargo doc...");
 
-        // First, try to find cached JSON files
-        for (package_name, package_version, manifest_path) in deps {
-            if let Some(cached_path) = self.find_cached_json(package_name, package_version) {
-                paths.push((package_name.clone(), package_version.clone(), cached_path));
-            } else {
-                need_generation.push((
-                    package_name.clone(),
-                    package_version.clone(),
-                    manifest_path.clone(),
-                ));
-            }
-            cache_pb.inc(1);
+        // Run cargo doc with JSON output flags
+        let mut cmd = ProcessCommand::new("cargo");
+        cmd.arg("+nightly")
+            .arg("doc")
+            .arg("--workspace")
+            .arg("--message-format=json")
+            .arg("--no-deps");
+
+        // Set RUSTDOCFLAGS for JSON output
+        let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
+        cmd.env("RUSTDOCFLAGS", rustdocflags);
+
+        // Run the command
+        let output = cmd.output().context("Failed to run cargo doc")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("cargo doc failed: {}", stderr));
         }
-        cache_pb.finish_with_message(format!(
-            "{} cached, {} need generation",
-            paths.len(),
-            need_generation.len()
-        ));
 
-        // Generate JSON for crates that don't have cached versions
-        if !need_generation.is_empty() {
-            let gen_pb = self.create_progress_bar(need_generation.len() as u64, "Generating docs");
+        // Parse JSON messages to find generated artifacts
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut json_files = Vec::new();
+        let mut crate_names = std::collections::HashSet::new();
 
-            for (package_name, package_version, manifest_path) in need_generation {
-                gen_pb.set_message(format!("Generating {} v{}", package_name, package_version));
+        for line in stdout.lines() {
+            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(line) {
+                if let Some(reason) = msg.get("reason").and_then(|v| v.as_str()) {
+                    if reason == "compiler-artifact" {
+                        if let Some(filenames) = msg
+                            .get("target")
+                            .and_then(|t| t.get("filenames"))
+                            .and_then(|f| f.as_array())
+                        {
+                            for filename in filenames {
+                                if let Some(path) = filename.as_str() {
+                                    let path = PathBuf::from(path);
+                                    if path.extension().map_or(false, |ext| ext == "json") {
+                                        // Extract crate name from filename (e.g., "serde.json" -> "serde")
+                                        if let Some(stem) = path.file_stem() {
+                                            let name = stem.to_string_lossy().to_string();
+                                            // Skip internal rustdoc crates
+                                            if !name.starts_with("rustdoc_")
+                                                && !crate_names.contains(&name)
+                                            {
+                                                crate_names.insert(name.clone());
 
-                // Use rustdoc-json with package-local manifest to document external dependencies
-                let builder = Builder::default()
-                    .toolchain("nightly")
-                    .manifest_path(&manifest_path);
+                                                // Try to get version from package_id
+                                                let version = msg
+                                                    .get("package_id")
+                                                    .and_then(|p| p.as_str())
+                                                    .and_then(|p| p.split_whitespace().nth(1))
+                                                    .map(|v| v.to_string())
+                                                    .unwrap_or_else(|| "0.0.0".to_string());
 
-                let builder = if self.all_features {
-                    builder.all_features(true)
-                } else {
-                    builder
-                };
-
-                // Wrap build in catch_unwind for graceful error handling
-                match panic::catch_unwind(|| builder.build()) {
-                    Ok(Ok(path)) => {
-                        paths.push((package_name, package_version, path));
-                    }
-                    Ok(Err(_e)) => {
-                        // Silently continue on error
-                    }
-                    Err(_) => {
-                        // Silently continue on panic
+                                                json_files.push((name, version, path));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                gen_pb.inc(1);
             }
-            gen_pb.finish_with_message(format!("Generated {} docs", paths.len()));
         }
 
-        if paths.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Failed to generate rustdoc JSON for any package"
-            ));
+        if json_files.is_empty() {
+            // Fallback: scan the output directory directly
+            return self.scan_json_files(&output_dir);
         }
 
-        Ok(paths)
+        println!("Generated {} rustdoc JSON files", json_files.len());
+        Ok(json_files)
     }
 
-    /// Generate stdlib rustdoc JSON using rust-src component
-    fn generate_stdlib_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
-        let stdlib_dir = PathBuf::from("target/doc-query/stdlib");
+    /// Fallback: scan directory for JSON files
+    fn scan_json_files(&self, dir: &Path) -> Result<Vec<(String, String, PathBuf)>> {
+        let mut json_files = Vec::new();
 
-        // Create stdlib directory
-        std::fs::create_dir_all(&stdlib_dir).context("Failed to create stdlib directory")?;
-
-        println!("Generating stdlib rustdoc JSON...");
-
-        // Find rust-src directory
-        let rustup_home = std::env::var("RUSTUP_HOME")
-            .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.rustup", h)))
-            .unwrap_or_else(|_| String::from("~/.rustup"));
-
-        let toolchain = "nightly"; // Try nightly first
-        let rust_src_dir = PathBuf::from(&rustup_home)
-            .join("toolchains")
-            .join(format!("{}-x86_64-unknown-linux-gnu", toolchain))
-            .join("lib/rustlib/src/rust/library");
-
-        // Fallback to stable if nightly not available
-        let rust_src_dir = if rust_src_dir.exists() {
-            rust_src_dir
-        } else {
-            let stable_toolchain = "stable";
-            PathBuf::from(&rustup_home)
-                .join("toolchains")
-                .join(format!("{}-x86_64-unknown-linux-gnu", stable_toolchain))
-                .join("lib/rustlib/src/rust/library")
-        };
-
-        if !rust_src_dir.exists() {
+        if !dir.exists() {
             return Err(anyhow::anyhow!(
-                "Rust source not found at {}. Run: rustup component add rust-src",
-                rust_src_dir.display()
+                "Output directory does not exist: {}",
+                dir.display()
             ));
         }
 
-        println!("Found rust-src at: {}", rust_src_dir.display());
+        let entries: Vec<std::fs::DirEntry> =
+            std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
 
-        // Generate JSON for each stdlib crate
-        let mut stdlib_crates = Vec::new();
-        let stdlib_packages = [
-            ("std", "0.0.0", "std/Cargo.toml"),
-            ("core", "0.0.0", "core/Cargo.toml"),
-            ("alloc", "0.0.0", "alloc/Cargo.toml"),
-            ("proc_macro", "0.0.0", "proc_macro/Cargo.toml"),
-        ];
+        for entry in entries {
+            let path = entry.path();
 
-        for (name, version, manifest_rel_path) in stdlib_packages {
-            println!("Generating JSON for {}...", name);
-
-            let manifest_path = rust_src_dir.join(manifest_rel_path);
-            if !manifest_path.exists() {
-                eprintln!(
-                    "⚠ Manifest not found for {}: {} (skipping)",
-                    name,
-                    manifest_path.display()
-                );
-                continue;
-            }
-
-            let builder = Builder::default()
-                .toolchain("nightly")
-                .manifest_path(&manifest_path);
-
-            // Wrap build in catch_unwind for graceful error handling
-            match panic::catch_unwind(|| builder.build()) {
-                Ok(Ok(path)) => {
-                    // Copy JSON to our stdlib directory with proper naming
-                    let dest_path = stdlib_dir.join(format!("{}.json", name));
-                    match std::fs::copy(&path, &dest_path) {
-                        Ok(_) => {
-                            println!("✓ Generated stdlib JSON: {}", name);
-                            stdlib_crates.push((name.to_string(), version.to_string(), dest_path));
-                        }
-                        Err(e) => {
-                            eprintln!("⚠ Failed to copy JSON for {}: {}", name, e);
-                        }
+            if path.extension().map_or(false, |ext| ext == "json") {
+                if let Some(stem) = path.file_stem() {
+                    let name = stem.to_string_lossy().to_string();
+                    // Skip internal files
+                    if !name.starts_with("rustdoc_") {
+                        json_files.push((name, "0.0.0".to_string(), path));
                     }
                 }
-                Ok(Err(e)) => {
-                    eprintln!("⚠ Failed to generate JSON for {}: {} (continuing)", name, e);
-                }
-                Err(_) => {
-                    eprintln!("⚠ Panic while generating JSON for {} (continuing)", name);
-                }
             }
         }
 
-        if stdlib_crates.is_empty() {
-            return Err(anyhow::anyhow!("No stdlib JSON files generated"));
-        }
-
-        println!("Generated stdlib JSON for {} crate(s)", stdlib_crates.len());
-
-        Ok(stdlib_crates)
+        Ok(json_files)
     }
 
     fn generate_serializable_index(
