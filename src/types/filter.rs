@@ -293,5 +293,68 @@ impl FilterEngine {
             || !self.crates.is_empty()
             || !self.visibilities.is_empty()
     }
-}
 
+    /// Validate that patterns are reasonable and not overly broad
+    ///
+    /// Returns warnings for patterns that might match too many items
+    pub fn validate_patterns(config: &FilterConfig) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // Warn about overly broad patterns
+        for pattern in &config.include {
+            if pattern == "*" || pattern == "**" {
+                warnings.push(format!(
+                    "Include pattern '{}' is very broad and may match all items. \
+                    Consider using a more specific pattern like 'crate::*'.",
+                    pattern
+                ));
+            }
+        }
+
+        // Check for duplicate patterns
+        for (i, pattern) in config.include.iter().enumerate() {
+            for other in config.include.iter().skip(i + 1) {
+                if pattern == other {
+                    warnings.push(format!("Duplicate include pattern: '{}'", pattern));
+                }
+            }
+        }
+
+        warnings
+    }
+
+    /// Get help text for glob syntax
+    pub fn glob_syntax_help() -> &'static str {
+        r#"Glob Pattern Syntax:
+
+*       Matches any sequence of characters (except path separator)
+?       Matches any single character
+**     Matches any sequence of characters including path separators
+[...]  Matches any character in the bracket
+[!...] Matches any character not in the bracket
+
+Examples:
+  'std::*'              - Match all items in std crate
+  'std::vec::*'         - Match all items in std::vec module
+  '*::test*'            - Match any item with 'test' in name
+  '**::Display'         - Match Display trait anywhere
+  'crate::[A-Z]*'       - Match items starting with capital letter
+"#
+    }
+
+    /// Estimate pattern complexity (higher = more items likely to match)
+    ///
+    /// Used for performance optimization - simple patterns are faster
+    pub fn pattern_complexity(pattern: &str) -> u32 {
+        let mut complexity = 0u32;
+        for c in pattern.chars() {
+            match c {
+                '*' => complexity += 10,
+                '?' => complexity += 5,
+                '[' => complexity += 15,
+                _ => complexity += 1,
+            }
+        }
+        complexity
+    }
+}
