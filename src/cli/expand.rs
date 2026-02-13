@@ -60,6 +60,10 @@ pub struct ExpandCommand {
     /// Include only matching items, exclude everything else
     #[arg(long, value_name = "PATTERN")]
     only: Option<String>,
+
+    /// Display glob syntax help and exit
+    #[arg(long)]
+    help_filters: bool,
 }
 
 impl ExpandCommand {
@@ -95,13 +99,14 @@ impl ExpandCommand {
         crate_filter: Vec<String>,
         visibility: Vec<String>,
         only: Option<String>,
+        help_filters: bool,
     ) -> Self {
         Self {
             path,
             depth,
             crate_name,
-            tokens,
-            minimal,
+            tokens: None,
+            minimal: false,
             json: false,
             quiet: false,
             include,
@@ -110,12 +115,65 @@ impl ExpandCommand {
             crate_filter,
             visibility,
             only,
+            help_filters,
         }
+    }
     }
 
     /// Set quiet mode
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    /// Validate filter arguments and return any errors
+    ///
+    /// Checks for mutually exclusive flags, invalid visibility values,
+    /// and contradictory patterns.
+    fn validate(&self) -> anyhow::Result<()> {
+        // Check for --include and --only both being specified
+        if !self.include.is_empty() && self.only.is_some() {
+            anyhow::bail!(
+                "Cannot use --include with --only. --only is shorthand for 'include this and exclude everything else'."
+            );
+        }
+
+        // Validate visibility values
+        let valid_visibilities = ["pub", "pub(crate)", "pub(super)", "private"];
+        for vis in &self.visibility {
+            if !valid_visibilities.contains(&vis.as_str()) {
+                anyhow::bail!(
+                    "Invalid visibility value '{}'. Valid options: {}",
+                    vis,
+                    valid_visibilities.join(", ")
+                );
+            }
+        }
+
+        // Detect contradictory patterns (e.g., include and exclude the same pattern)
+        let include_patterns: std::collections::HashSet<String> = self.include.iter().cloned().collect();
+        let exclude_patterns: std::collections::HashSet<String> = self.exclude.iter().cloned().collect();
+
+        // Check for same pattern in both include and exclude
+        for pattern in &include_patterns {
+            if exclude_patterns.contains(pattern) {
+                println!("Warning: Pattern '{}' appears in both --include and --exclude. Exclude takes precedence.");
+            }
+        }
+
+        // Check for completely contradictory patterns (no overlap)
+        if !self.include.is_empty() && !self.exclude.is_empty() {
+            // Determine if any pattern would match anything
+            // (Simplified check - in practice, glob patterns are complex)
+            let has_overlap = !self.include.iter().all(|p| self.exclude.iter().any(|ex| p == ex));
+
+            if !has_overlap {
+                println!(
+                    "Warning: Your filter patterns have no overlap. Consider reviewing your patterns to ensure you're filtering something."
+                );
+            }
+        }
+
+        Ok(())
     }
 
     /// Create FilterConfig from CLI filter arguments
@@ -156,6 +214,15 @@ impl ExpandCommand {
 
 impl Command for ExpandCommand {
     fn execute(&self) -> Result<()> {
+        // Display glob syntax help if requested
+        if self.help_filters {
+            self.display_glob_syntax_help();
+            return Ok(());
+        }
+
+        // Validate filter arguments
+        self.validate()?;
+
         // Validate token budget
         if let Some(tokens) = self.tokens {
             if tokens < 100 {
@@ -318,5 +385,33 @@ impl Command for ExpandCommand {
         }
 
         Some(expansion)
+    }
+
+    /// Display glob pattern syntax help
+    fn display_glob_syntax_help(&self) {
+        println!("Filter Pattern Syntax (Glob Patterns)");
+        println!("====================================\n");
+
+        println!("Special Characters:");
+        println!("  *       Matches any sequence of characters (except path separator)");
+        println!("  ?       Matches any single character");
+        println!("  **      Matches any sequence including path separators");
+        println!("  [...]   Matches any character in brackets");
+        println!("  [!...]  Matches any character NOT in brackets\n");
+
+        println!("Examples:");
+        println!("  'std::*'           → All items in std crate");
+        println!("  'std::vec::*'      → All items in std::vec module");
+        println!("  '*::test*'         → Items with \"test\" in the name");
+        println!("  '**::Display'      → Display trait anywhere");
+        println!("  'crate::[A-Z]*'    → Items starting with capital letter");
+        println!("  'serde::de::*'     → All items in serde::de module\n");
+
+        println!("Tips:");
+        println!("  - Use quotes around patterns with special characters");
+        println!("  - Patterns are case-sensitive for paths");
+        println!("  - Multiple --include flags = OR logic");
+        println!("  - Different flag types = AND logic");
+        println!("  - Run `cargo doc-query query --help` for filtering options");
     }
 }
