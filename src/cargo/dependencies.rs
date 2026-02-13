@@ -66,13 +66,13 @@ mod tests {
     fn test_manifest_path_canonicalization() {
         // Test that relative and absolute paths are handled correctly
         let current_dir = std::env::current_dir().unwrap();
-        let manifest_path = current_dir.join("Cargo.toml");
+        let manifest_path = current_dir.join("test-Cargo.toml");
 
         // This should not panic even with canonicalization
         let canonicalized =
             std::fs::canonicalize(&manifest_path).unwrap_or_else(|_| manifest_path.clone());
 
         assert!(canonicalized.is_absolute() || manifest_path.is_absolute());
-        assert!(canonicalized.ends_with("Cargo.toml"));
+        assert!(canonicalized.ends_with("test-Cargo.toml"));
     }
 }

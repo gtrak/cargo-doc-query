@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_cache_key_deterministic_same_inputs() {
-        let manifest_path = Path::new("Cargo.toml");
+        let manifest_path = Path::new("test-Cargo.toml");
         let inputs1 = CacheKeyInputs::from_project(manifest_path).unwrap();
         let inputs2 = CacheKeyInputs::from_project(manifest_path).unwrap();
 
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_cache_key_non_empty() {
-        let manifest_path = Path::new("Cargo.toml");
+        let manifest_path = Path::new("test-Cargo.toml");
         let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
 
         let key = inputs.generate_key();
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_cache_key_always_valid_hex() {
-        let manifest_path = Path::new("Cargo.toml");
+        let manifest_path = Path::new("test-Cargo.toml");
         let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
 
         let key = inputs.generate_key();

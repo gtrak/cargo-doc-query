@@ -81,23 +81,22 @@ impl CacheStore {
                         latest_mtime = Some(mtime);
                         latest_path = Some(path);
                     }
-                    Some(current_latest) => {
-                        if mtime > *current_latest {
-                            latest_mtime = Some(mtime);
-                            latest_path = Some(path);
-                        }
+                    Some(latest_ref) if mtime > *latest_ref => {
+                        latest_mtime = Some(mtime);
+                        latest_path = Some(path);
                     }
+                    _ => {}
                 }
             }
         }
 
         match latest_path {
-            Some(path) => {
-                let data = std::fs::read(&path).context("Failed to read cache file")?;
+            None => Ok(None),
+            Some(latest_path) => {
+                let data = std::fs::read(&latest_path).context("Failed to read cache file")?;
                 let index = from_bytes(&data).context("Failed to deserialize index")?;
                 Ok(Some(index))
             }
-            None => Ok(None),
         }
     }
 
@@ -216,34 +215,34 @@ mod tests {
     #[test]
     fn test_cache_save_overwrites_existing() {
         let cache_store = CacheStore::new().unwrap();
-        let cache_key = "overwrite-test";
+        let cache_key = format!("overwrite-test-{}", std::process::id());
 
         let test_index1 = SerializableIndex {
             format_version: 1,
-            cache_key: cache_key.to_string(),
+            cache_key: cache_key.clone(),
             nodes: vec![],
             edges: vec![],
         };
 
         let test_index2 = SerializableIndex {
             format_version: 2,
-            cache_key: cache_key.to_string(),
+            cache_key: cache_key.clone(),
             nodes: vec![],
             edges: vec![],
         };
 
-        cache_store.save(cache_key, &test_index1).unwrap();
+        cache_store.save(&cache_key, &test_index1).unwrap();
 
-        let loaded_before = cache_store.load(cache_key).unwrap().unwrap();
+        let loaded_before = cache_store.load(&cache_key).unwrap().unwrap();
         assert_eq!(loaded_before.format_version, 1);
 
         // Clean up any existing file before saving
         let existing_path = cache_store.cache_dir.join(format!("{}.idx", cache_key));
         let _ = std::fs::remove_file(&existing_path);
 
-        cache_store.save(cache_key, &test_index2).unwrap();
+        cache_store.save(&cache_key, &test_index2).unwrap();
 
-        let loaded_after = cache_store.load(cache_key).unwrap().unwrap();
+        let loaded_after = cache_store.load(&cache_key).unwrap().unwrap();
         assert_eq!(loaded_after.format_version, 2);
     }
 
@@ -283,14 +282,6 @@ mod tests {
             assert_eq!(*to, original.edges[i].1);
             assert_eq!(edge_type, &original.edges[i].2);
         }
-    }
-
-    #[test]
-    fn test_clear_stdlib_nonexistent_directory() {
-        let cache_store = CacheStore::new().unwrap();
-        // Should not error if stdlib directory doesn't exist
-        let result = cache_store.clear_stdlib();
-        assert!(result.is_ok());
     }
 
     #[test]

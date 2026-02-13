@@ -4,6 +4,7 @@ use anyhow::Result;
 use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::cache::store::SerializableIndex;
 use crate::query::lookup::PathResolver;
@@ -58,13 +59,29 @@ impl TypeExpander {
                 anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
             })?;
 
-        let json_path = &crate_node.json_path;
-        let json_str = fs::read_to_string(json_path).map_err(|e| {
-            anyhow::anyhow!("Failed to read rustdoc JSON from {}: {}", json_path, e)
+        let json_path = PathBuf::from(&crate_node.json_path);
+        let json_path = if json_path.is_absolute() {
+            json_path
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(&json_path)
+        };
+
+        let json_str = fs::read_to_string(&json_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to read rustdoc JSON from {}: {}",
+                json_path.display(),
+                e
+            )
         })?;
 
         let krate: Crate = serde_json::from_str(&json_str).map_err(|e| {
-            anyhow::anyhow!("Failed to parse rustdoc JSON from {}: {}", json_path, e)
+            anyhow::anyhow!(
+                "Failed to parse rustdoc JSON from {}: {}",
+                json_path.display(),
+                e
+            )
         })?;
 
         self.crates.insert(key, krate);

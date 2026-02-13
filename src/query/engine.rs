@@ -5,6 +5,7 @@ use rustdoc_types::{Crate, Function, Id, Impl, Item, ItemEnum, Type};
 use serde_json;
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
 
 use crate::cache::store::SerializableIndex;
 use crate::query::format::TypeFormatter;
@@ -135,13 +136,23 @@ impl QueryEngine {
                 anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
             })?;
 
-        // Load rustdoc JSON
-        let json_path = &crate_node.json_path;
-        let json_str = fs::read_to_string(json_path)
-            .with_context(|| format!("Failed to read rustdoc JSON from {}", json_path))?;
+        // Resolve the path (relative to current directory, or absolute)
+        let json_path = PathBuf::from(&crate_node.json_path);
+        let json_path = if json_path.is_absolute() {
+            json_path
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(&json_path)
+        };
 
-        let krate: Crate = serde_json::from_str(&json_str)
-            .with_context(|| format!("Failed to parse rustdoc JSON from {}", json_path))?;
+        // Load rustdoc JSON
+        let json_str = fs::read_to_string(&json_path)
+            .with_context(|| format!("Failed to read rustdoc JSON from {}", json_path.display()))?;
+
+        let krate: Crate = serde_json::from_str(&json_str).with_context(|| {
+            format!("Failed to parse rustdoc JSON from {}", json_path.display())
+        })?;
 
         self.crates.insert(key, krate);
         Ok(())
@@ -164,31 +175,33 @@ impl QueryEngine {
     ) -> Result<QueryResponse> {
         let mut matches = Vec::new();
 
-        // Collect crate names to load first (sorted for deterministic order)
-        let mut crates_to_load: Vec<(String, String)> = self
+        // Collect crate names to search (sorted for deterministic order)
+        let mut crates_to_search: Vec<(String, String)> = self
             .index
             .nodes
             .iter()
             .filter(|n| crate_filter.map_or(true, |f| n.name == f))
             .map(|n| (n.name.clone(), n.version.clone()))
             .collect();
-        crates_to_load.sort_by(|a, b| a.0.cmp(&b.0));
+        crates_to_search.sort_by(|a, b| a.0.cmp(&b.0));
 
-        // Load all crates first (to avoid borrowing issues)
-        for (name, version) in &crates_to_load {
-            self.load_crate(name, version)?;
-        }
-
-        // Now execute queries on loaded crates
-        for (crate_name, crate_version) in &crates_to_load {
+        // Try each crate one at a time, load only what's needed
+        for (crate_name, crate_version) in &crates_to_search {
+            // Load this crate
+            self.load_crate(crate_name, crate_version)?;
             let krate = self.get_crate(crate_name, crate_version)?;
 
+            // Check if this crate has the type
             let items = PathResolver::find_by_path(krate, path);
 
             if items.is_empty() {
+                // Remove from cache to free memory
+                let key = format!("{}::{}", crate_name, crate_version);
+                self.crates.remove(&key);
                 continue;
             }
 
+            // Found it - extract matches
             for (id, item) in items {
                 let kind = Self::item_kind(item)?;
                 let content = self.extract_content(krate, id, item, &kind, options)?;
@@ -201,6 +214,9 @@ impl QueryEngine {
                     content,
                 ));
             }
+
+            // Only load first crate that has the type
+            break;
         }
 
         if matches.is_empty() {

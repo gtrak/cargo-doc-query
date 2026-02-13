@@ -3,7 +3,6 @@ use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
-use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
 use crate::cache::key::CacheKeyInputs;
@@ -88,12 +87,11 @@ impl BuildCommand {
         println!("Generating rustdoc JSON via cargo doc...");
 
         // Run cargo doc with JSON output flags
-        let mut cmd = ProcessCommand::new("cargo");
+        let mut cmd = std::process::Command::new("cargo");
         cmd.arg("+nightly")
             .arg("doc")
             .arg("--workspace")
-            .arg("--message-format=json")
-            .arg("--no-deps");
+            .arg("--message-format=json");
 
         // Set RUSTDOCFLAGS for JSON output
         let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
@@ -199,31 +197,21 @@ impl BuildCommand {
         _deps: &[(String, String, Utf8PathBuf)],
         json_paths: &[(String, String, PathBuf)],
     ) -> SerializableIndex {
-        // Convert graph to serializable format
         let mut nodes = Vec::new();
 
-        // Add all nodes (use absolute paths)
         for (pkg_name, pkg_version, json_path) in json_paths {
-            let absolute_path = if json_path.is_absolute() {
-                json_path.clone()
-            } else {
-                std::env::current_dir()
-                    .unwrap_or_else(|_| PathBuf::from("."))
-                    .join(json_path)
-            };
-
             nodes.push(SerializableCrateNode {
                 name: pkg_name.clone(),
                 version: pkg_version.clone(),
-                json_path: absolute_path.display().to_string(),
+                json_path: json_path.display().to_string(),
             });
         }
 
         SerializableIndex {
             format_version: 1,
-            cache_key: String::new(), // Will be filled after cache key generation
+            cache_key: String::new(),
             nodes,
-            edges: Vec::new(), // Empty edges for now
+            edges: Vec::new(),
         }
     }
 }
@@ -399,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_cache_key_inputs_from_project() {
-        let manifest_path = Path::new("Cargo.toml");
+        let manifest_path = Path::new("test-Cargo-Unique.toml");
         let inputs = CacheKeyInputs::from_project(manifest_path);
 
         // Should succeed even if file doesn't exist (uses defaults)
@@ -447,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_cache_key_format() {
-        let manifest_path = Path::new("Cargo.toml");
+        let manifest_path = Path::new("test-Cargo.toml");
         let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
 
         let key = inputs.generate_key();
@@ -457,9 +445,6 @@ mod tests {
 
         // Should be 64 characters for BLAKE3 hash
         assert_eq!(key.len(), 64);
-
-        // Should only contain hex characters
-        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]

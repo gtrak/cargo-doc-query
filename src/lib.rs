@@ -6,3 +6,6 @@ pub mod error;
 pub mod format;
 pub mod query;
 pub mod types;
+
+#[cfg(test)]
+mod proptest;
