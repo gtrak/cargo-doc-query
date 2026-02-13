@@ -409,6 +409,12 @@ pub fn format_expand_result_with_formatter(
     detail_level: DetailLevel,
     token_budget: Option<usize>,
 ) {
+    use crate::format::budget::{BudgetTracker, TruncationAction};
+    use crate::format::item::{
+        FieldInfo as ItemFieldInfo, FormattedItem, FunctionModifiers,
+        VariantInfo as ItemVariantInfo,
+    };
+
     println!(
         "{}",
         style(format!("Expanding: {}", root_path)).bold().cyan()
@@ -420,13 +426,10 @@ pub fn format_expand_result_with_formatter(
         return;
     }
 
-    // Collect all items from nodes
-    // Note: In a real implementation, we'd extract Item from TypeNode
-    // For now, this demonstrates the integration pattern
-
     let mut tracker = BudgetTracker::new(token_budget);
+    let _formatter = ItemFormatter::new(detail_level.clone(), token_budget);
 
-    // Display nodes similar to original format_expand_result
+    // Collect nodes by depth
     let mut nodes_by_depth: std::collections::HashMap<u32, Vec<&crate::types::expand::TypeNode>> =
         std::collections::HashMap::new();
 
@@ -439,19 +442,111 @@ pub fn format_expand_result_with_formatter(
 
     for depth in depths {
         if let Some(nodes) = nodes_by_depth.get(&depth) {
-            if depth == 0 {
-                for node in nodes {
-                    format_type_node(node, 0);
-                    // Track tokens for this node
-                    let estimated = 20 + node.fields.len() * 5 + node.items.len() * 10;
-                    let _ = tracker.track_item(estimated, 0);
-                }
+            let prefix = if depth == 0 {
+                "".to_string()
             } else {
-                println!("\n  {}", style(format!("Depth {}:", depth)).bold().dim());
-                for node in nodes {
-                    format_type_node(node, 2);
-                    let estimated = 20 + node.fields.len() * 5 + node.items.len() * 10;
-                    let _ = tracker.track_item(estimated, 0);
+                "  ".to_string()
+            };
+            let heading = if depth == 0 {
+                style(format!("{}:", root_path)).bold()
+            } else {
+                style(format!("Depth {}:", depth)).bold().dim()
+            };
+
+            if depth > 0 {
+                println!("\n{}", heading);
+            } else {
+                println!("{}", heading);
+            }
+
+            for node in nodes {
+                // Convert TypeNode to FormattedItem for unified rendering
+                let mods = FunctionModifiers {
+                    is_const: node.is_const.unwrap_or(false),
+                    is_async: node.is_async.unwrap_or(false),
+                    is_unsafe: node.is_unsafe.unwrap_or(false),
+                    abi: node.abi.clone(),
+                };
+
+                let formatted = FormattedItem {
+                    id: node.id.clone(),
+                    kind: node.kind.clone(),
+                    name: node.id.split("::").last().map(String::from),
+                    signature: None,
+                    visibility: Some(node.visibility.clone()),
+                    generics: if node.generic_params.is_empty() {
+                        None
+                    } else {
+                        Some(format!("<{}>", node.generic_params.join(", ")))
+                    },
+                    docs: None, // TypeNode doesn't have docs field
+                    fields: node
+                        .fields
+                        .iter()
+                        .map(|f| ItemFieldInfo {
+                            name: f.name.clone(),
+                            type_path: f.type_path.clone(),
+                            is_optional: f.is_optional,
+                        })
+                        .collect(),
+                    variants: node
+                        .variants
+                        .iter()
+                        .map(|v| ItemVariantInfo {
+                            name: v.name.clone(),
+                            fields: v
+                                .fields
+                                .iter()
+                                .map(|f| ItemFieldInfo {
+                                    name: f.name.clone(),
+                                    type_path: f.type_path.clone(),
+                                    is_optional: f.is_optional,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    items: node
+                        .items
+                        .iter()
+                        .map(|mi| crate::format::item::NestedItemInfo {
+                            name: mi.name.clone(),
+                            kind: mi.kind.clone(),
+                            path: mi.path.clone(),
+                        })
+                        .collect(),
+                    is_deprecated: node.is_deprecated.unwrap_or(false),
+                    deprecation_note: node.deprecation_note.clone(),
+                    attributes: node.attributes.clone(),
+                    modifiers: Some(mods),
+                };
+
+                // Estimate tokens including doc tokens
+                let estimated = 20 + formatted.fields.len() * 5 + formatted.items.len() * 10;
+                let doc_tokens = formatted.docs.as_ref().map(|d| d.len() / 4).unwrap_or(0);
+
+                let (_remaining, action) = tracker.track_item(estimated, doc_tokens);
+
+                if action == TruncationAction::Include {
+                    // Print the formatted item
+                    println!("{}{}", prefix, style(formatted.kind.as_str()).cyan());
+                    println!("{}  {}", prefix, formatted.id);
+                    if let Some(ref gens) = formatted.generics {
+                        println!("{}  {}", prefix, gens);
+                    }
+                    if let Some(ref vis) = formatted.visibility {
+                        if vis != "private" {
+                            println!("{}  {}", prefix, style(vis.as_str()).dim());
+                        }
+                    }
+                    if formatted.is_deprecated {
+                        println!("{}  {}", prefix, style("deprecated").yellow());
+                    }
+                    for field in &formatted.fields {
+                        println!("{}  {}: {}", prefix, style("field").dim(), field.name);
+                    }
+                    for variant in &formatted.variants {
+                        println!("{}  {}: {}", prefix, style("variant").dim(), variant.name);
+                    }
                 }
             }
         }
