@@ -20,6 +20,27 @@ pub struct QueryMatch {
     pub fully_qualified_path: String,
     pub kind: String,
     pub content: QueryContent,
+
+    // New fields for FIELD-01..04
+    /// Visibility modifier (FIELD-01)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<String>,
+
+    /// Generic parameters in Rust syntax (FIELD-03)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generics: Option<String>,
+
+    /// Whether the item is deprecated (FIELD-02)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_deprecated: Option<bool>,
+
+    /// Deprecation note/replacement hint (FIELD-02)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deprecation_note: Option<String>,
+
+    /// Key attributes: #[must_use], #[non_exhaustive] (FIELD-04)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attributes: Vec<String>,
 }
 
 /// Content of a match - type, trait, or module result
@@ -83,6 +104,24 @@ pub struct MethodOutput {
     pub docs: Option<String>,
     #[serde(skip_serializing_if = "is_false")]
     pub is_trait_method: bool,
+
+    // New fields for FIELD-05
+    /// Whether the function is const (FIELD-05)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_const: Option<bool>,
+
+    /// Whether the function is async (FIELD-05)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_async: Option<bool>,
+
+    /// Whether the function is unsafe (FIELD-05)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_unsafe: Option<bool>,
+
+    /// ABI string for non-Rust ABIs (FIELD-05)
+    /// Only present when ABI is not "Rust"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub abi: Option<String>,
 }
 
 /// Associated type output for trait queries
@@ -110,6 +149,11 @@ pub struct TraitImplOutput {
 /// Helper function for skipping false values
 pub(crate) fn is_false(b: &bool) -> bool {
     !b
+}
+
+/// Helper function for skipping empty vectors
+pub(crate) fn is_empty<T>(v: &[T]) -> bool {
+    v.is_empty()
 }
 
 impl QueryResponse {
@@ -165,7 +209,37 @@ impl QueryMatch {
             fully_qualified_path,
             kind,
             content,
+            visibility: None,
+            generics: None,
+            is_deprecated: None,
+            deprecation_note: None,
+            attributes: Vec::new(),
         }
+    }
+
+    /// Set the visibility
+    pub fn with_visibility(mut self, vis: impl Into<String>) -> Self {
+        self.visibility = Some(vis.into());
+        self
+    }
+
+    /// Set the generics
+    pub fn with_generics(mut self, generics: impl Into<String>) -> Self {
+        self.generics = Some(generics.into());
+        self
+    }
+
+    /// Set the deprecation information
+    pub fn with_deprecation(mut self, note: Option<String>) -> Self {
+        self.is_deprecated = Some(true);
+        self.deprecation_note = note;
+        self
+    }
+
+    /// Set the attributes
+    pub fn with_attributes(mut self, attrs: Vec<String>) -> Self {
+        self.attributes = attrs;
+        self
     }
 
     /// Convert to minimal representation
@@ -180,6 +254,11 @@ impl QueryMatch {
                 QueryContent::Trait(t) => QueryContent::Trait(t.to_minimal()),
                 QueryContent::Module(m) => QueryContent::Module(m.to_minimal()),
             },
+            visibility: None, // FIELD-06: omitted in minimal mode
+            generics: None,
+            is_deprecated: None,
+            deprecation_note: None,
+            attributes: Vec::new(),
         }
     }
 }
@@ -274,6 +353,10 @@ impl MethodOutput {
             is_public,
             docs: None,
             is_trait_method: false,
+            is_const: None,
+            is_async: None,
+            is_unsafe: None,
+            abi: None,
         }
     }
 
@@ -289,6 +372,30 @@ impl MethodOutput {
         self
     }
 
+    /// Set whether this is a const function
+    pub fn with_is_const(mut self, is_const: bool) -> Self {
+        self.is_const = Some(is_const);
+        self
+    }
+
+    /// Set whether this is an async function
+    pub fn with_is_async(mut self, is_async: bool) -> Self {
+        self.is_async = Some(is_async);
+        self
+    }
+
+    /// Set whether this is an unsafe function
+    pub fn with_is_unsafe(mut self, is_unsafe: bool) -> Self {
+        self.is_unsafe = Some(is_unsafe);
+        self
+    }
+
+    /// Set the ABI string
+    pub fn with_abi(mut self, abi: Option<String>) -> Self {
+        self.abi = abi;
+        self
+    }
+
     /// Convert to minimal representation
     pub fn to_minimal(&self) -> Self {
         Self {
@@ -299,6 +406,10 @@ impl MethodOutput {
             is_public: self.is_public,
             docs: None,                                                    // Omit docs
             is_trait_method: self.is_trait_method && self.is_trait_method, // Only keep if true
+            is_const: None, // FIELD-06: omitted in minimal mode
+            is_async: None,
+            is_unsafe: None,
+            abi: None,
         }
     }
 }
