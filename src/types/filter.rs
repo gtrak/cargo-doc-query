@@ -70,6 +70,8 @@ impl FilterConfig {
     }
 }
 
+/// Trait for items that can be filtered
+#[cfg(test)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,6 +488,23 @@ impl FilterEngine {
             || !self.visibilities.is_empty()
     }
 
+    /// Filter a slice of QueryMatch items
+    ///
+    /// Returns only items that match all active filters
+    pub fn filter_matches<'a, T: Filterable>(&self, items: &'a [T]) -> Vec<&'a T> {
+        items
+            .iter()
+            .filter(|item| {
+                self.matches(
+                    item.filter_path(),
+                    item.filter_kind(),
+                    item.filter_crate(),
+                    item.filter_visibility(),
+                )
+            })
+            .collect()
+    }
+
     /// Filter and clone matches (for owned collections)
     pub fn filter_matches_owned<T: Filterable + Clone>(&self, items: &[T]) -> Vec<T> {
         items
@@ -564,5 +583,135 @@ Examples:
             }
         }
         complexity
+    }
+}
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::types::query::{QueryContent, QueryMatch, TypeResult};
+
+    fn create_test_match(path: &str, kind: &str, crate_name: &str) -> QueryMatch {
+        QueryMatch {
+            crate_name: crate_name.to_string(),
+            version: "1.0.0".to_string(),
+            fully_qualified_path: path.to_string(),
+            kind: kind.to_string(),
+            content: QueryContent::Type(TypeResult {
+                kind: kind.to_string(),
+                methods: vec![],
+                trait_implementations: vec![],
+            }),
+        }
+    }
+
+    #[test]
+    fn test_filter_query_matches_include() {
+        let items = vec![
+            create_test_match("std::vec::Vec", "struct", "std"),
+            create_test_match("std::string::String", "struct", "std"),
+            create_test_match("crate::foo::Bar", "struct", "my_crate"),
+        ];
+
+        let config = FilterConfig::default().with_include("std::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        let filtered = engine.filter_matches(&items);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].filter_path(), "std::vec::Vec");
+        assert_eq!(filtered[1].filter_path(), "std::string::String");
+    }
+
+    #[test]
+    fn test_filter_with_stats() {
+        let items = vec![
+            create_test_match("std::vec::Vec", "struct", "std"),
+            create_test_match("std::string::String", "struct", "std"),
+            create_test_match("crate::foo::Bar", "struct", "my_crate"),
+        ];
+
+        let config = FilterConfig::default().with_include("std::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        let (filtered, stats) = engine.filter_with_stats(&items);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(stats.total_checked, 3);
+        assert_eq!(stats.items_passed, 2);
+        assert_eq!(stats.rejected_by_include, 1);
+        assert!(stats.pass_rate() > 0.6 && stats.pass_rate() < 0.7);
+    }
+
+    #[test]
+    fn test_pattern_validation_warnings() {
+        let config = FilterConfig::default().with_include("*");
+
+        let warnings = FilterEngine::validate_patterns(&config);
+        assert!(!warnings.is_empty());
+        assert!(warnings[0].contains("very broad"));
+    }
+
+    #[test]
+    fn test_complex_patterns() {
+        // Test character class
+        let config = FilterConfig::default().with_include("crate::[A-Z]*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        assert!(engine.matches("crate::Foo", "struct", "crate", "pub"));
+        assert!(!engine.matches("crate::bar", "struct", "crate", "pub"));
+
+        // Test complex pattern with multiple wildcards
+        let config2 = FilterConfig::default().with_include("*::*");
+        let engine2 = FilterEngine::compile(&config2).unwrap();
+
+        assert!(engine2.matches("std::vec::Vec", "struct", "std", "pub"));
+        assert!(engine2.matches("crate::Foo", "struct", "my_crate", "pub"));
+        assert!(!engine2.matches("std", "trait", "std", "pub"));
+    }
+
+    #[test]
+    fn test_filter_query_matches_complex() {
+        let items = vec![
+            create_test_match("std::fmt::Display", "trait", "std"),
+            create_test_match("std::fmt::Debug", "trait", "std"),
+            create_test_match("serde::Serialize", "trait", "serde"),
+            create_test_match("crate::Bar", "struct", "my_crate"),
+        ];
+
+        // Filter by crate and kind
+        let config = FilterConfig::default()
+            .with_include("std::*")
+            .with_kind("trait");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        let filtered = engine.filter_matches(&items);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].filter_path(), "std::fmt::Display");
+        assert_eq!(filtered[1].filter_path(), "std::fmt::Debug");
+    }
+
+    #[test]
+    fn test_filter_stats_summary() {
+        let config = FilterConfig::default().with_include("std::*");
+        let engine = FilterEngine::compile(&config).unwrap();
+
+        let items = vec![
+            create_test_match("std::vec::Vec", "struct", "std"),
+            create_test_match("std::string::String", "struct", "std"),
+            create_test_match("crate::foo::Bar", "struct", "my_crate"),
+        ];
+
+        let (filtered, stats) = engine.filter_with_stats(&items);
+
+        // Check summary format
+        let summary = stats.summary();
+        assert!(summary.contains("checked"));
+        assert!(summary.contains("passed"));
+        assert!(summary.contains("%"));
+
+        // Verify stats are accurate
+        assert_eq!(
+            summary,
+            "Filter Stats: 3 checked, 2 passed (33.3% rejection rate)"
+        );
     }
 }
