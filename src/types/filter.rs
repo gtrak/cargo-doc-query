@@ -65,6 +65,29 @@ impl FilterConfig {
     }
 }
 
+/// Errors that can occur during filter pattern compilation
+#[derive(Error, Debug, Clone)]
+pub enum FilterError {
+    #[error("Invalid glob pattern '{pattern}': {message}")]
+    InvalidGlob { pattern: String, message: String },
+    #[error("Empty pattern provided")]
+    EmptyPattern,
+    #[error("Conflicting filters: include and exclude patterns match the same item")]
+    ConflictingFilters { item: String },
+}
+
+impl From<glob::PatternError> for FilterError {
+    fn from(err: glob::PatternError) -> Self {
+        Self::InvalidGlob {
+            pattern: err
+                .pos()
+                .map(|p| format!("at position {}", p))
+                .unwrap_or_default(),
+            message: err.to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
