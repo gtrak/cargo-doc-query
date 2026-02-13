@@ -112,6 +112,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ## Phase 8: Result Type Extensions
 
+**Status:** 🟡 Planned — 5 plans in 3 waves ready for execution
 **Goal:** Enrich query results with visibility, deprecation, generics, attributes, and ABI metadata
 
 **Phase Goal:** Users can see rich metadata for items including visibility modifiers, deprecation status, generic parameters, and key attributes.
@@ -152,6 +153,8 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - [ ] **08-03**: Extend TypeNode and ModuleItemInfo for expand command (FIELD-01..05 for expansion)
 - [ ] **08-04**: Add --detailed flag and wire DetailLevel through CLI (FIELD-08)
 - [ ] **08-05**: Update extraction functions to populate new fields (FIELD-06, integration)
+
+**Plans created:** 2026-02-13 | **Ready for execution**
 
 ### Deliverables
 
