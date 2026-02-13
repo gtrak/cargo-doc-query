@@ -1,7 +1,7 @@
 # Project State: cargo-doc-query
 
 **Milestone:** v1.1 Output Refinement — In progress
-**Current Phase:** 7 (5 phases planned)
+**Current Phase:** 9 (5 phases planned)
 **Status:** Requirements defined, roadmap created
 **Last Updated:** 2026-02-13
 **Roadmap:** `.planning/ROADMAP-v1.1.md`
@@ -10,12 +10,12 @@
 
 ## Current Position
 
-**Phase:** 8 — Result Types
-**Plan:** 5 of 7 in current phase
-**Status:** Completed
-**Last activity:** 2026-02-13 — Completed 08-05-SUMMARY.md
+**Phase:** 9 — Unified Rendering
+**Plan:** 1 of N in current phase
+**Status:** In progress
+**Last activity:** 2026-02-13 — Completed 09-01-SUMMARY.md
 
-Progress: ████████████████████████████████████████░░░ 100% (Phase 8) | 28/28 (100%)
+Progress: ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 5% (Phase 9) | 29/33 (88%)
 
 ---
 
@@ -71,21 +71,18 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 21:12 UTC
-**Stopped at:** Completed 08-05-PLAN.md
-**Resume file:** .planning/phases/08-result-types/08-05-SUMMARY.md
+**Last session:** 2026-02-13 21:40 UTC
+**Stopped at:** Completed 09-01-SUMMARY.md
+**Resume file:** .planning/phases/09-unified-rendering/09-01-SUMMARY.md
 
 ### Recent Context
 
-Completed plan 08-05 for extraction functions:
-- Imported extraction helpers from types::detail in query/engine.rs and query/expand.rs
-- Added DetailLevel to QueryOptions and TypeExpander
-- Updated extract_query_match to populate visibility, generics, deprecation, attributes based on DetailLevel
-- Updated extract_method to populate function modifiers (is_const, is_async, is_unsafe, abi) in Detailed mode
-- Updated extract_type_result and extract_trait_result to populate generic_params in Standard/Detailed modes
-- Added DetailLevel to TypeExpander and populate TypeNode metadata (generics, deprecation, attributes)
-- Wired DetailLevel through CLI -> ExpandCommand -> TypeExpander
-- All 278 tests passing
+Completed plan 09-01 for unified rendering dispatcher:
+- Created src/format/item.rs with ItemFormatter and FormattedItem structs
+- format_item() dispatcher handles all ItemKind variants with DetailLevel control
+- Supports Minimal/Standard/Detailed modes for visibility, generics, docs, attributes
+- Added 3 tests verifying struct formatting, detail level behavior, and token budget
+- All 281 tests pass
 
 Completed plan 08-04 for --detailed CLI flag:
 - Added --detailed/-d flag to CLI Args struct (args.rs)
@@ -184,6 +181,9 @@ v1.1 start with focus shift:
 - Phase 08-05: DetailLevel passed through QueryOptions to extraction functions
 - Phase 08-05: TypeExpander stores DetailLevel for use during recursive expansion
 - Phase 08-05: Metadata extraction respects Minimal/Standard/Detailed modes
+- Phase 09-01: Single format_item() handles all ItemKind variants
+- Phase 09-01: DetailLevel controls visibility/generics/docs/attributes at render time
+- Phase 09-01: Uses { .. } pattern for struct variants (Constant, AssocConst, AssocType)
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
