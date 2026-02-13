@@ -978,4 +978,553 @@ mod tests {
         assert_eq!(minimal.methods.len(), impl_output.methods.len());
         assert_eq!(minimal.provided_methods.len(), 0); // Should be empty in minimal
     }
+
+    // =========================================================================
+    // JSON Backward Compatibility Tests (FIELD-07)
+    // =========================================================================
+
+    use serde::Deserialize;
+
+    /// Old QueryMatch structure for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldQueryMatch {
+        crate_name: String,
+        version: String,
+        fully_qualified_path: String,
+        kind: String,
+        content: OldQueryContent,
+    }
+
+    /// Old QueryContent for backward compatibility testing
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OldQueryContent {
+        Type(OldTypeResult),
+        Trait(OldTraitResult),
+        Module(OldModuleResult),
+    }
+
+    /// Old TypeResult for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldTypeResult {
+        kind: String,
+        methods: Vec<OldMethodOutput>,
+        trait_implementations: Vec<OldTraitImplOutput>,
+    }
+
+    /// Old TraitResult for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldTraitResult {
+        name: String,
+        path: String,
+        methods: Vec<OldMethodOutput>,
+        associated_types: Vec<OldAssociatedTypeOutput>,
+    }
+
+    /// Old ModuleResult for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldModuleResult {
+        items: Vec<OldModuleItem>,
+        submodules: Vec<String>,
+    }
+
+    /// Old MethodOutput for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldMethodOutput {
+        name: String,
+        signature: String,
+        return_type: String,
+        visibility: String,
+        is_public: bool,
+    }
+
+    /// Old AssociatedTypeOutput for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldAssociatedTypeOutput {
+        name: String,
+    }
+
+    /// Old TraitImplOutput for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldTraitImplOutput {
+        trait_name: String,
+        trait_path: String,
+        methods: Vec<OldMethodOutput>,
+    }
+
+    /// Old ModuleItem for backward compatibility testing
+    #[derive(Deserialize)]
+    struct OldModuleItem {
+        name: String,
+        kind: String,
+        path: String,
+    }
+
+    #[test]
+    fn test_json_backward_compatibility_query_match() {
+        // Create a QueryMatch with new fields
+        let match_ = QueryMatch::new(
+            "test_crate".to_string(),
+            "1.0.0".to_string(),
+            "test_crate::MyType".to_string(),
+            "type".to_string(),
+            QueryContent::Type(TypeResult::new("struct".to_string())),
+        )
+        .with_visibility("pub")
+        .with_generics("<T>")
+        .with_deprecation(Some("Use NewType instead".to_string()))
+        .with_attributes(vec!["#[must_use]".to_string()]);
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&match_).unwrap();
+
+        // Deserialize using old structure (simulates old client)
+        let old: OldQueryMatch = serde_json::from_str(&json).unwrap();
+
+        // Core fields should match
+        assert_eq!(old.crate_name, match_.crate_name);
+        assert_eq!(old.version, match_.version);
+        assert_eq!(old.fully_qualified_path, match_.fully_qualified_path);
+        assert_eq!(old.kind, match_.kind);
+    }
+
+    #[test]
+    fn test_json_backward_compatibility_type_result() {
+        let type_result = TypeResult::new("struct".to_string()).with_generic_params("<T: Clone>");
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::vec::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+        let old: OldQueryMatch = serde_json::from_str(&json).unwrap();
+
+        if let OldQueryContent::Type(old_type) = old.content {
+            assert_eq!(old_type.kind, "struct");
+        } else {
+            panic!("Expected Type content");
+        }
+    }
+
+    #[test]
+    fn test_json_backward_compatibility_trait_result() {
+        let trait_result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string())
+            .with_generic_params("<T>");
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::clone::Clone".to_string(),
+            "trait".to_string(),
+            QueryContent::Trait(trait_result),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+        let old: OldQueryMatch = serde_json::from_str(&json).unwrap();
+
+        if let OldQueryContent::Trait(old_trait) = old.content {
+            assert_eq!(old_trait.name, "Clone");
+            assert_eq!(old_trait.path, "std::clone::Clone");
+        } else {
+            panic!("Expected Trait content");
+        }
+    }
+
+    #[test]
+    fn test_json_backward_compatibility_method_output() {
+        let mut type_result = TypeResult::new("struct".to_string());
+        let method = MethodOutput::new(
+            "new".to_string(),
+            "fn() -> Self".to_string(),
+            "Self".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_is_const(true)
+        .with_is_async(false)
+        .with_is_unsafe(false)
+        .with_abi(None);
+        type_result.add_method(method);
+
+        let match_ = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Type".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+        let old: OldQueryMatch = serde_json::from_str(&json).unwrap();
+
+        if let OldQueryContent::Type(old_type) = old.content {
+            assert_eq!(old_type.methods.len(), 1);
+            assert_eq!(old_type.methods[0].name, "new");
+            assert_eq!(old_type.methods[0].signature, "fn() -> Self");
+            assert_eq!(old_type.methods[0].visibility, "pub");
+            assert!(old_type.methods[0].is_public);
+        } else {
+            panic!("Expected Type content");
+        }
+    }
+
+    #[test]
+    fn test_optional_fields_omitted_in_json() {
+        // QueryMatch with no optional fields set
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Type(TypeResult::new("struct".to_string())),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+
+        // Should not contain optional field keys when they're None/empty
+        assert!(
+            !json.contains("\"visibility\""),
+            "visibility should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"generics\""),
+            "generics should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"is_deprecated\""),
+            "is_deprecated should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"deprecation_note\""),
+            "deprecation_note should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"attributes\""),
+            "attributes should be omitted when empty"
+        );
+    }
+
+    #[test]
+    fn test_optional_fields_present_when_set() {
+        let match_ = QueryMatch::new(
+            "std".to_string(),
+            "1.0.0".to_string(),
+            "std::Vec".to_string(),
+            "type".to_string(),
+            QueryContent::Type(TypeResult::new("struct".to_string())),
+        )
+        .with_visibility("pub")
+        .with_generics("<T>")
+        .with_deprecation(Some("Old".to_string()))
+        .with_attributes(vec!["#[must_use]".to_string()]);
+
+        let json = serde_json::to_string(&match_).unwrap();
+
+        // Should contain fields when they're set
+        assert!(
+            json.contains("\"visibility\":\"pub\""),
+            "visibility should be present when set"
+        );
+        assert!(
+            json.contains("\"generics\":\"<T>\""),
+            "generics should be present when set"
+        );
+        assert!(
+            json.contains("\"is_deprecated\":true"),
+            "is_deprecated should be present when set"
+        );
+        assert!(
+            json.contains("\"deprecation_note\""),
+            "deprecation_note should be present when set"
+        );
+        assert!(
+            json.contains("\"attributes\""),
+            "attributes should be present when non-empty"
+        );
+    }
+
+    #[test]
+    fn test_method_optional_fields_omitted_in_json() {
+        let mut type_result = TypeResult::new("struct".to_string());
+        let method = MethodOutput::new(
+            "simple".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        );
+        type_result.add_method(method);
+
+        let match_ = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Type".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+
+        // Method modifiers should be omitted when None
+        assert!(
+            !json.contains("\"is_const\""),
+            "is_const should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"is_async\""),
+            "is_async should be omitted when None"
+        );
+        assert!(
+            !json.contains("\"is_unsafe\""),
+            "is_unsafe should be omitted when None"
+        );
+        assert!(!json.contains("\"abi\""), "abi should be omitted when None");
+    }
+
+    #[test]
+    fn test_method_optional_fields_present_when_set() {
+        let mut type_result = TypeResult::new("struct".to_string());
+        let method = MethodOutput::new(
+            "complex".to_string(),
+            "fn()".to_string(),
+            "()".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_is_const(true)
+        .with_is_async(true)
+        .with_is_unsafe(true)
+        .with_abi(Some("C".to_string()));
+        type_result.add_method(method);
+
+        let match_ = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Type".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let json = serde_json::to_string(&match_).unwrap();
+
+        // Method modifiers should be present when set
+        assert!(
+            json.contains("\"is_const\":true"),
+            "is_const should be present when true"
+        );
+        assert!(
+            json.contains("\"is_async\":true"),
+            "is_async should be present when true"
+        );
+        assert!(
+            json.contains("\"is_unsafe\":true"),
+            "is_unsafe should be present when true"
+        );
+        assert!(
+            json.contains("\"abi\":\"C\""),
+            "abi should be present when set"
+        );
+    }
+
+    #[test]
+    fn test_generic_params_omitted_in_json() {
+        let type_result = TypeResult::new("struct".to_string());
+        let trait_result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string());
+
+        let match_type = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Type".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let match_trait = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Trait".to_string(),
+            "trait".to_string(),
+            QueryContent::Trait(trait_result),
+        );
+
+        let json_type = serde_json::to_string(&match_type).unwrap();
+        let json_trait = serde_json::to_string(&match_trait).unwrap();
+
+        assert!(
+            !json_type.contains("\"generic_params\""),
+            "generic_params should be omitted for TypeResult when None"
+        );
+        assert!(
+            !json_trait.contains("\"generic_params\""),
+            "generic_params should be omitted for TraitResult when None"
+        );
+    }
+
+    #[test]
+    fn test_generic_params_present_when_set() {
+        let type_result = TypeResult::new("struct".to_string()).with_generic_params("<T>");
+        let trait_result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string())
+            .with_generic_params("<T>");
+
+        let match_type = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Type".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        );
+
+        let match_trait = QueryMatch::new(
+            "test".to_string(),
+            "1.0.0".to_string(),
+            "test::Trait".to_string(),
+            "trait".to_string(),
+            QueryContent::Trait(trait_result),
+        );
+
+        let json_type = serde_json::to_string(&match_type).unwrap();
+        let json_trait = serde_json::to_string(&match_trait).unwrap();
+
+        assert!(
+            json_type.contains("\"generic_params\":\"<T>\""),
+            "generic_params should be present for TypeResult when set"
+        );
+        assert!(
+            json_trait.contains("\"generic_params\":\"<T>\""),
+            "generic_params should be present for TraitResult when set"
+        );
+    }
+
+    #[test]
+    fn test_minimal_mode_json_size_reduction() {
+        // Create a match with all new fields populated
+        let mut type_result =
+            TypeResult::new("struct".to_string()).with_generic_params("<T: Clone>");
+        let method = MethodOutput::new(
+            "method".to_string(),
+            "fn() -> T".to_string(),
+            "T".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_docs(Some("Some documentation".to_string()))
+        .with_is_const(true)
+        .with_is_async(false)
+        .with_is_unsafe(true)
+        .with_abi(Some("C".to_string()));
+        type_result.add_method(method);
+
+        let full_match = QueryMatch::new(
+            "test_crate".to_string(),
+            "1.0.0".to_string(),
+            "test_crate::MyType".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        )
+        .with_visibility("pub")
+        .with_generics("<T>")
+        .with_deprecation(Some("Use NewType".to_string()))
+        .with_attributes(vec!["#[must_use]".to_string()]);
+
+        let minimal_match = full_match.to_minimal();
+
+        let full_json = serde_json::to_string(&full_match).unwrap();
+        let minimal_json = serde_json::to_string(&minimal_match).unwrap();
+
+        // Minimal JSON should be smaller
+        assert!(
+            minimal_json.len() < full_json.len(),
+            "Minimal JSON should be smaller: {} vs {}",
+            minimal_json.len(),
+            full_json.len()
+        );
+
+        // Minimal should not contain new optional fields (QueryMatch optional fields, MethodOutput optional fields)
+        // Note: MethodOutput.visibility is a String (not Option<String>), so it's always present
+        assert!(
+            !minimal_json.contains("\"generics\""),
+            "generics should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"is_deprecated\""),
+            "is_deprecated should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"deprecation_note\""),
+            "deprecation_note should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"attributes\""),
+            "attributes should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"is_const\""),
+            "is_const should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"is_async\""),
+            "is_async should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"is_unsafe\""),
+            "is_unsafe should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"abi\""),
+            "abi should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"generic_params\""),
+            "generic_params should be omitted in minimal"
+        );
+        assert!(
+            !minimal_json.contains("\"docs\""),
+            "docs should be omitted in minimal"
+        );
+    }
+
+    #[test]
+    fn test_minimal_preserves_core_fields() {
+        let mut type_result = TypeResult::new("struct".to_string()).with_generic_params("<T>");
+        let method = MethodOutput::new(
+            "method".to_string(),
+            "fn() -> T".to_string(),
+            "T".to_string(),
+            "pub".to_string(),
+            true,
+        )
+        .with_docs(Some("Docs".to_string()))
+        .with_is_const(true);
+        type_result.add_method(method);
+
+        let full_match = QueryMatch::new(
+            "test_crate".to_string(),
+            "1.0.0".to_string(),
+            "test_crate::MyType".to_string(),
+            "type".to_string(),
+            QueryContent::Type(type_result),
+        )
+        .with_visibility("pub")
+        .with_generics("<T>");
+
+        let minimal = full_match.to_minimal();
+
+        // Core fields should be preserved
+        assert_eq!(minimal.crate_name, full_match.crate_name);
+        assert_eq!(minimal.version, full_match.version);
+        assert_eq!(
+            minimal.fully_qualified_path,
+            full_match.fully_qualified_path
+        );
+        assert_eq!(minimal.kind, full_match.kind);
+
+        // New fields should be cleared
+        assert!(minimal.visibility.is_none());
+        assert!(minimal.generics.is_none());
+        assert!(minimal.is_deprecated.is_none());
+        assert!(minimal.deprecation_note.is_none());
+        assert!(minimal.attributes.is_empty());
+    }
 }
