@@ -118,7 +118,7 @@ enum Commands {
     #[command(name = "query")]
     Query {
         /// The path to query (e.g., std::vec::Vec)
-        path: String,
+        path: Option<String>,
 
         /// Maximum recursion depth for expanding nested types (default: 0)
         ///
@@ -238,6 +238,19 @@ fn run(cli: Cli) -> Result<(), AppError> {
             only,
             help_filters,
         } => {
+            // Handle --help-filters without requiring a path
+            if *help_filters {
+                print_glob_syntax_help();
+                return Ok(());
+            }
+
+            // Validate that path is provided
+            let path = path.as_ref().ok_or_else(|| {
+                AppError::Config(
+                    "PATH argument is required. Use --help for usage information.".to_string(),
+                )
+            })?;
+
             // Always use expand (unified rendering)
             // Default depth is 1 to show submodules, depth=0 shows just the type
             let depth = if *depth == 0 { 1 } else { *depth };
@@ -302,4 +315,32 @@ fn suggest_similar_types(path: &str) -> anyhow::Result<Vec<String>> {
     } else {
         Ok(vec![])
     }
+}
+
+/// Display glob pattern syntax help
+fn print_glob_syntax_help() {
+    println!("Filter Pattern Syntax (Glob Patterns)");
+    println!("=====================================\n");
+
+    println!("Special Characters:");
+    println!("  *       Matches any sequence of characters (except path separator)");
+    println!("  ?       Matches any single character");
+    println!("  **      Matches any sequence including path separators");
+    println!("  [...]   Matches any character in brackets");
+    println!("  [!...]  Matches any character NOT in brackets\n");
+
+    println!("Examples:");
+    println!("  'std::*'           → All items in std crate");
+    println!("  'std::vec::*'      → All items in std::vec module");
+    println!("  '*::test*'         → Items with \"test\" in the name");
+    println!("  '**::Display'      → Display trait anywhere");
+    println!("  'crate::[A-Z]*'    → Items starting with capital letter");
+    println!("  'serde::de::*'     → All items in serde::de module\n");
+
+    println!("Tips:");
+    println!("  - Use quotes around patterns with special characters");
+    println!("  - Patterns are case-sensitive for paths");
+    println!("  - Multiple --include flags = OR logic");
+    println!("  - Different flag types = AND logic");
+    println!("  - Run `cargo doc-query query --help` for filtering options");
 }
