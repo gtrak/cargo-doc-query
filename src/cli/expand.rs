@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use crate::cli::Command;
 use crate::types::expand::TokenConfig;
+use crate::types::filter::FilterConfig;
 
 #[derive(Parser, Debug)]
 pub struct ExpandCommand {
@@ -35,9 +36,34 @@ pub struct ExpandCommand {
     /// Suppress progress indicators and timing info
     #[arg(skip)]
     pub quiet: bool,
+
+    /// Include patterns (glob) - items must match at least one
+    #[arg(short, long, value_name = "PATTERN")]
+    include: Vec<String>,
+
+    /// Exclude patterns (glob) - items must not match any
+    #[arg(short, long, value_name = "PATTERN")]
+    exclude: Vec<String>,
+
+    /// Filter by item kind (struct, enum, trait, function, etc.) (multiple allowed)
+    #[arg(short, long, value_name = "KIND")]
+    kind: Vec<String>,
+
+    /// Filter by crate name (multiple allowed)
+    #[arg(long, value_name = "CRATE")]
+    crate_filter: Vec<String>,
+
+    /// Filter by visibility (pub, pub(crate), pub(super), private)
+    #[arg(long, value_name = "VIS")]
+    visibility: Vec<String>,
+
+    /// Include only matching items, exclude everything else
+    #[arg(long, value_name = "PATTERN")]
+    only: Option<String>,
 }
 
 impl ExpandCommand {
+    #[deprecated(note = "Use from_args() instead - supports filter flags")]
     pub fn new(path: String, depth: u32, crate_name: Option<String>) -> Self {
         Self {
             path,
@@ -47,6 +73,12 @@ impl ExpandCommand {
             minimal: false,
             json: false,
             quiet: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            kind: Vec::new(),
+            crate_filter: Vec::new(),
+            visibility: Vec::new(),
+            only: None,
         }
     }
 
@@ -57,6 +89,12 @@ impl ExpandCommand {
         crate_name: Option<String>,
         tokens: Option<usize>,
         minimal: bool,
+        include: Vec<String>,
+        exclude: Vec<String>,
+        kind: Vec<String>,
+        crate_filter: Vec<String>,
+        visibility: Vec<String>,
+        only: Option<String>,
     ) -> Self {
         Self {
             path,
@@ -66,12 +104,53 @@ impl ExpandCommand {
             minimal,
             json: false,
             quiet: false,
+            include,
+            exclude,
+            kind,
+            crate_filter,
+            visibility,
+            only,
         }
     }
 
     /// Set quiet mode
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    /// Create FilterConfig from CLI filter arguments
+    ///
+    /// If --only is specified, it takes precedence over --include.
+    /// Otherwise, --include is used as the include pattern.
+    fn filter_config(&self) -> FilterConfig {
+        let include_pattern = self.only.as_ref().map(|s| s.as_str());
+
+        let mut config = FilterConfig::default();
+        if let Some(pattern) = include_pattern {
+            config = config.with_include(pattern.to_string());
+        } else {
+            for pattern in &self.include {
+                config = config.with_include(pattern.clone());
+            }
+        }
+
+        for pattern in &self.exclude {
+            config = config.with_exclude(pattern.clone());
+        }
+
+        for kind in &self.kind {
+            config = config.with_kind(kind.clone());
+        }
+
+        for crate_name in &self.crate_filter {
+            config = config.with_crate(crate_name.clone());
+        }
+
+        for vis in &self.visibility {
+            config = config.with_visibility(vis.clone());
+        }
+
+        config
     }
 }
 
