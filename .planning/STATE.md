@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 8 — Result Types
-**Plan:** 1 of 7 in current phase
+**Plan:** 2 of 7 in current phase
 **Status:** In progress
-**Last activity:** 2026-02-13 — Completed 08-01-PLAN.md
+**Last activity:** 2026-02-13 — Completed 08-02-PLAN.md
 
-Progress: █████████████████████████████████████████░░░ 88% (Phase 8) | 24/25 (96%)
+Progress: █████████████████████████████████████████░░░ 88% (Phase 8) | 25/26 (96%)
 
 ---
 
@@ -71,11 +71,20 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 19:37 UTC
-**Stopped at:** Completed 08-01-PLAN.md
-**Resume file:** .planning/phases/08-result-types/08-01-SUMMARY.md
+**Last session:** 2026-02-13 19:55 UTC
+**Stopped at:** Completed 08-02-PLAN.md
+**Resume file:** .planning/phases/08-result-types/08-02-SUMMARY.md
 
 ### Recent Context
+
+Completed plan 08-02 for Result Type Extensions:
+- Extended MethodOutput with is_const, is_async, is_unsafe, abi optional fields (FIELD-05)
+- Extended TypeResult with generic_params optional field (FIELD-03)
+- Extended TraitResult with generic_params optional field (FIELD-03)
+- Added builder methods for all new fields (with_is_const, with_is_async, with_is_unsafe, with_abi, with_generic_params)
+- Updated to_minimal() to clear all new optional fields (FIELD-06)
+- Added 12 comprehensive JSON backward compatibility tests (FIELD-07)
+- All 268 library tests passing
 
 Completed plan 08-01 for Result Types foundation:
 - Created DetailLevel enum with Minimal, Standard, Detailed variants
@@ -133,9 +142,12 @@ v1.1 start with focus shift:
 **Decisions:**
 - Phase 08-01: DetailLevel enum with Minimal/Standard/Detailed variants
 - Phase 08-01: Synthetic generics filtered out (is_synthetic: true)
-- Phase 08-01: Non-Rust ABIs identified and returned (Rust ABI returns None)
+- Phase 08-01: Non-Rust ABIs return Some(abi_name), Rust returns None
 - Phase 08-01: Deprecation "since" field skipped per requirements
 - Phase 08-01: Attributes filtered to must_use and non_exhaustive only
+- Phase 08-02: MethodOutput.visibility kept as String (required), only modifiers are optional
+- Phase 08-02: All new fields use Option<T> with skip_serializing_if for clean JSON
+- Phase 08-02: Old struct definitions in tests verify backward compatibility
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
