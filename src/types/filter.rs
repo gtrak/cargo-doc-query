@@ -309,17 +309,39 @@ pub struct FilterEngine {
 }
 
 impl FilterEngine {
-    /// Compile FilterConfig into FilterEngine
+    /// Check if engine has no active filters
     ///
-    /// Returns FilterError if any pattern is invalid
+    /// This is the fast path - if no filters are active, all items pass.
+    fn is_empty(&self) -> bool {
+        self.include.is_empty()
+            && self.exclude.is_empty()
+            && self.kinds.is_empty()
+            && self.crates.is_empty()
+            && self.visibilities.is_empty()
+    }
+}
+
+impl FilterEngine {
+    /// Compile FilterConfig into FilterEngine with pattern optimization
+    ///
+    /// Patterns are ordered by complexity (simple patterns first) for better average-case performance.
+    /// Returns FilterError if any pattern is invalid.
     pub fn compile(config: &FilterConfig) -> Result<Self, FilterError> {
+        Self::compile_optimized(config)
+    }
+
+    /// Compile with pattern optimization (internal)
+    ///
+    /// Patterns are sorted by complexity (simple patterns first) for better average-case performance.
+    fn compile_optimized(config: &FilterConfig) -> Result<Self, FilterError> {
+        // Compile and sort include patterns by complexity
         let mut include = Vec::new();
         for pattern in &config.include {
             if pattern.is_empty() {
                 return Err(FilterError::EmptyPattern);
             }
             match Pattern::new(pattern) {
-                Ok(p) => include.push(p),
+                Ok(p) => include.push((p, Self::pattern_complexity(pattern))),
                 Err(e) => {
                     return Err(FilterError::InvalidGlob {
                         pattern: pattern.clone(),
@@ -328,14 +350,18 @@ impl FilterEngine {
                 }
             }
         }
+        // Sort by complexity (simple patterns first)
+        include.sort_by_key(|(_, c)| *c);
+        let include: Vec<Pattern> = include.into_iter().map(|(p, _)| p).collect();
 
+        // Compile and sort exclude patterns by complexity
         let mut exclude = Vec::new();
         for pattern in &config.exclude {
             if pattern.is_empty() {
                 return Err(FilterError::EmptyPattern);
             }
             match Pattern::new(pattern) {
-                Ok(p) => exclude.push(p),
+                Ok(p) => exclude.push((p, Self::pattern_complexity(pattern))),
                 Err(e) => {
                     return Err(FilterError::InvalidGlob {
                         pattern: pattern.clone(),
@@ -344,6 +370,9 @@ impl FilterEngine {
                 }
             }
         }
+        // Sort by complexity (simple patterns first)
+        exclude.sort_by_key(|(_, c)| *c);
+        let exclude: Vec<Pattern> = exclude.into_iter().map(|(p, _)| p).collect();
 
         Ok(Self {
             include,
@@ -355,36 +384,52 @@ impl FilterEngine {
     }
 
     /// Check if an item matches all active filters (AND logic)
+    ///
+    /// Optimized matching order:
+    /// 1. Exclude patterns (fail fast - most restrictive)
+    /// 2. Kind filter (string comparison - cheap)
+    /// 3. Crate filter (string comparison - cheap)
+    /// 4. Visibility filter (string comparison - cheap)
+    /// 5. Include patterns (glob matching - most expensive)
+    ///
+    /// This ordering minimizes the number of expensive glob pattern matches.
     pub fn matches(&self, path: &str, kind: &str, crate_name: &str, visibility: &str) -> bool {
-        // Must match at least one include pattern (if any specified)
-        if !self.include.is_empty() {
-            if !self.include.iter().any(|p| p.matches(path)) {
+        // Fast path: no filters active
+        if self.is_empty() {
+            return true;
+        }
+
+        // 1. Must not match any exclude pattern (fail fast - most restrictive)
+        if !self.exclude.is_empty() {
+            if self.exclude.iter().any(|p| p.matches(path)) {
                 return false;
             }
         }
 
-        // Must not match any exclude pattern
-        if self.exclude.iter().any(|p| p.matches(path)) {
-            return false;
-        }
-
-        // Must match kind filter (if specified) - case insensitive
+        // 2. Must match kind filter (case insensitive)
         if !self.kinds.is_empty() {
             if !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
                 return false;
             }
         }
 
-        // Must match crate filter (if specified)
+        // 3. Must match crate filter
         if !self.crates.is_empty() {
             if !self.crates.iter().any(|c| c == crate_name) {
                 return false;
             }
         }
 
-        // Must match visibility filter (if specified)
+        // 4. Must match visibility filter
         if !self.visibilities.is_empty() {
             if !self.visibilities.iter().any(|v| v == visibility) {
+                return false;
+            }
+        }
+
+        // 5. Must match at least one include pattern (most expensive - last)
+        if !self.include.is_empty() {
+            if !self.include.iter().any(|p| p.matches(path)) {
                 return false;
             }
         }
@@ -481,11 +526,7 @@ impl FilterEngine {
 
     /// Check if this engine has any active filters
     pub fn is_active(&self) -> bool {
-        !self.include.is_empty()
-            || !self.exclude.is_empty()
-            || !self.kinds.is_empty()
-            || !self.crates.is_empty()
-            || !self.visibilities.is_empty()
+        !self.is_empty()
     }
 
     /// Filter a slice of QueryMatch items
