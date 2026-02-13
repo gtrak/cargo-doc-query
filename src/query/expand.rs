@@ -124,11 +124,11 @@ impl TypeExpander {
 
         for key in crate_keys {
             // Get a reference to the crate - we need to be careful about borrowing
-            let items: Vec<(Id, Item)> = {
+            let items: Vec<(String, Id, Item)> = {
                 let krate = self.crates.get(&key).unwrap();
                 PathResolver::find_by_path(krate, path)
                     .into_iter()
-                    .map(|(id, item)| (id.clone(), item.clone()))
+                    .map(|(id, item)| (key.clone(), id.clone(), item.clone()))
                     .collect()
             };
 
@@ -138,7 +138,7 @@ impl TypeExpander {
 
             found = true;
 
-            for (id, item) in items {
+            for (crate_name, id, item) in items {
                 self.visited.clear();
                 self.current_depth = 0;
 
@@ -147,7 +147,7 @@ impl TypeExpander {
                     | ItemEnum::Enum(_)
                     | ItemEnum::Union(_)
                     | ItemEnum::TypeAlias(_) => {
-                        if let Some(node) = self.expand_item(&id, 0)? {
+                        if let Some(node) = self.expand_item(&crate_name, &id, 0)? {
                             // Update token count for the node
                             self.add_tokens(node.estimate_tokens());
                             graph.add_node(node);
@@ -155,7 +155,7 @@ impl TypeExpander {
                     }
                     ItemEnum::Module(_) => {
                         // Expand module contents
-                        self.expand_module(&id, 0, &mut graph)?;
+                        self.expand_module(&crate_name, &id, 0, &mut graph)?;
                     }
                     _ => {
                         // Skip items that aren't types or modules (macros, etc.)
@@ -185,7 +185,12 @@ impl TypeExpander {
         Ok(result)
     }
 
-    fn expand_item(&mut self, item_id: &Id, depth: u32) -> Result<Option<TypeNode>> {
+    fn expand_item(
+        &mut self,
+        crate_name: &str,
+        item_id: &Id,
+        depth: u32,
+    ) -> Result<Option<TypeNode>> {
         if self.visited.contains(item_id) {
             return Ok(None);
         }
@@ -208,21 +213,16 @@ impl TypeExpander {
             }
         }
 
-        // Find the item in any loaded crate
-        let mut item: Option<Item> = None;
-        let mut krate_key: Option<String> = None;
-
-        for (key, crate_data) in &self.crates {
-            if let Some(found_item) = crate_data.index.get(item_id) {
-                item = Some(found_item.clone());
-                krate_key = Some(key.clone());
-                break;
-            }
-        }
-
-        let item = item.ok_or_else(|| anyhow::anyhow!("Item not found"))?;
-        let krate_key = krate_key.ok_or_else(|| anyhow::anyhow!("Crate not found"))?;
-        let krate = self.crates.get(&krate_key).unwrap();
+        // Find the item in the SPECIFIC crate (not all crates - IDs are not globally unique!)
+        let krate = self
+            .crates
+            .get(crate_name)
+            .ok_or_else(|| anyhow::anyhow!("Crate {} not found", crate_name))?;
+        let item = krate
+            .index
+            .get(item_id)
+            .ok_or_else(|| anyhow::anyhow!("Item {:?} not found in crate {}", item_id, crate_name))?
+            .clone();
 
         let type_path = self.get_path(krate, *item_id);
 
@@ -338,7 +338,13 @@ impl TypeExpander {
     }
 
     /// Expand a module and its contents
-    fn expand_module(&mut self, module_id: &Id, depth: u32, graph: &mut TypeGraph) -> Result<()> {
+    fn expand_module(
+        &mut self,
+        crate_name: &str,
+        module_id: &Id,
+        depth: u32,
+        graph: &mut TypeGraph,
+    ) -> Result<()> {
         if self.visited.contains(module_id) {
             return Ok(());
         }
@@ -349,23 +355,21 @@ impl TypeExpander {
             return Ok(());
         }
 
-        // Find the module in any loaded crate
-        let mut module_item: Option<Item> = None;
-        let mut krate_key: Option<String> = None;
-
-        for (key, crate_data) in &self.crates {
-            if let Some(found_item) = crate_data.index.get(module_id) {
-                module_item = Some(found_item.clone());
-                krate_key = Some(key.clone());
-                break;
-            }
-        }
-
-        let module_item = module_item.ok_or_else(|| anyhow::anyhow!("Module not found"))?;
-        let krate_key = krate_key.ok_or_else(|| anyhow::anyhow!("Crate not found"))?;
+        // Find the module in the SPECIFIC crate (not all crates - IDs are not globally unique!)
+        let krate = self
+            .crates
+            .get(crate_name)
+            .ok_or_else(|| anyhow::anyhow!("Crate {} not found", crate_name))?;
+        let module_item = krate
+            .index
+            .get(module_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Module {:?} not found in crate {}", module_id, crate_name)
+            })?
+            .clone();
 
         // Clone crate data to avoid borrow issues
-        let krate = self.crates.get(&krate_key).unwrap().clone();
+        let krate = krate.clone();
 
         let module_path = self.get_path(&krate, *module_id);
         let mut node = TypeNode::new(module_path, "module".to_string(), depth);
@@ -405,8 +409,9 @@ impl TypeExpander {
         graph.add_node(node);
 
         // Now expand submodules (after releasing borrows)
+        // Submodules are in the SAME crate as the parent
         for submodule_id in submodules_to_expand {
-            self.expand_module(&submodule_id, depth + 1, graph)?;
+            self.expand_module(crate_name, &submodule_id, depth + 1, graph)?;
         }
 
         Ok(())
