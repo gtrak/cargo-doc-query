@@ -1,5 +1,11 @@
 # cargo-doc-query
 
+## Current State
+
+**Shipped:** v1.0 MVP (2026-02-13)
+
+A production-ready Cargo subcommand for fast, structured API queries over Rust dependencies. Currently used for LLM agent contexts and CLI exploration.
+
 ## What This Is
 
 A Cargo subcommand that provides fast, structured, low-context queries over Rust dependency APIs using rustdoc JSON output. Designed for LLM agents and CLI users who need quick API discovery without the overhead of LSP daemons or raw source code.
@@ -10,23 +16,25 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
-(None yet — ship to validate)
+- ✓ Generate rustdoc JSON for all dependencies — v1.0
+- ✓ Query methods for any type with signatures and fully qualified types — v1.0
+- ✓ JSON output optimized for LLM agents — v1.0
+- ✓ Recursive type expansion with depth limits — v1.0
+- ✓ Trait implementation discovery — v1.0
+- ✓ Associated type resolution — v1.0
+- ✓ Automatic rebuild when Cargo.lock changes — v1.0
+- ✓ Per-crate incremental rebuilds — v1.0
+- ✓ Content-addressable cache storage — v1.0
+- ✓ Token-budget constrained output modes — v1.0
+- ✓ Minimal and verbose output formats — v1.0
 
-### Active
+### Active (v1.1)
 
-- [ ] Generate rustdoc JSON for all dependencies
-- [ ] Query methods for any type with signatures and fully qualified types
-- [ ] JSON output optimized for LLM agents
-- [ ] Recursive type expansion with depth limits
-- [ ] Trait implementation discovery
-- [ ] Associated type resolution
-- [ ] Automatic rebuild when Cargo.lock changes
-- [ ] Per-crate incremental rebuilds
-- [ ] Content-addressable cache storage
-- [ ] Token-budget constrained output modes
-- [ ] Minimal and verbose output formats
+- [ ] Stdlib queries (Vec, String, Iterator)
+- [ ] Shared cache directory across projects
+- [ ] Garbage collection command
 
 ### Out of Scope
 
@@ -36,6 +44,12 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 - General semantic search across codebases
 - Real-time collaboration features
 - GUI interface
+
+## Next Milestone Goals (v1.1)
+
+1. **Shared Cache** — Deduplicate dependency JSON across projects in `~/.cargo/doc-query/`
+2. **Stdlib Support** — Query standard library types (requires rust build system integration)
+3. **Garbage Collection** — Clean up stale cache files with `cargo doc-query gc`
 
 ## Context
 
@@ -79,11 +93,13 @@ LSP (rust-analyzer) limitations:
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Use rustdoc JSON instead of LSP | Deterministic, no daemon, machine-readable | — Pending |
-| Sharded crate storage | Memory efficiency, selective rebuilds | — Pending |
-| Content-hash cache invalidation | Automatic rebuild on dependency changes | — Pending |
-| Nightly Rust required | Only way to get JSON output from rustdoc | — Accepted |
+|----------|-----------|----------|
+| Use rustdoc JSON instead of LSP | Deterministic, no daemon, machine-readable | ✓ Good — sub-100ms queries achieved |
+| Sharded crate storage | Memory efficiency, selective rebuilds | ✓ Good — 83 crates indexed efficiently |
+| Content-hash cache invalidation | Automatic rebuild on dependency changes | ✓ Good — BLAKE3 works well |
+| Nightly Rust required | Only way to get JSON output from rustdoc | ✓ Accepted — documented requirement |
+| Typed errors (ExpandError) | Replace fragile string matching | ✓ Good — cleaner error handling |
+| Unified query/expand command | Simplify CLI, single code path | ✓ Good — removed duplication |
 
 ---
-*Last updated: 2026-02-12 after initialization*
+*Last updated: 2026-02-13 after v1.0 milestone completion*
