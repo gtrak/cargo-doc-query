@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 9 — Unified Rendering
-**Plan:** 4 of N in current phase
+**Plan:** 5 of N in current phase
 **Status:** In progress
-**Last activity:** 2026-02-13 — Completed 09-04-SUMMARY.md
+**Last activity:** 2026-02-13 — Completed 09-05-SUMMARY.md
 
-Progress: ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 10% (Phase 9) | 31/33 (94%)
+Progress: █████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 14% (Phase 9) | 32/33 (97%)
 
 ---
 
@@ -71,13 +71,19 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 21:57 UTC
-**Stopped at:** Completed 09-03-SUMMARY.md
-**Resume file:** .planning/phases/09-unified-rendering/09-03-SUMMARY.md
+**Last session:** 2026-02-13 22:15 UTC
+**Stopped at:** Completed 09-05-SUMMARY.md
+**Resume file:** .planning/phases/09-unified-rendering/09-05-SUMMARY.md
 
 ### Recent Context
 
-Completed plan 09-03 for token budget integration:
+Completed plan 09-05 for CLI integration:
+- Added import for format_expand_result_with_formatter and format_with_item_formatter
+- Replaced format_expand_result call with unified formatter variant in expand.rs
+- Passed detail_level (from DetailLevel::from_flags) and token_budget (self.tokens)
+- All 308 tests pass
+
+Completed plan 09-04 for text format functions:
 - Created src/format/budget.rs with BudgetTracker struct
 - track_item() for per-item token accounting
 - would_exceed(), remaining(), is_warning_needed() methods
@@ -213,6 +219,7 @@ v1.1 start with focus shift:
 - Phase 09-03: TruncationAction enum: Include/Truncate for budget decisions
 - Phase 09-03: Warning threshold default 0.8 (80%)
 - Phase 09-03: estimate_item_tokens() uses rough calculation: 20 base + 5/field + 5/variant + 10/nested + docs/4
+- Phase 09-05: Unified formatter wired to CLI expand command with DetailLevel and token budget
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
@@ -238,9 +245,8 @@ v1.1 start with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
-| Plans completed | 25/26 (96%) | 26 total |
-| Tests passing | 278 | - |
-| Tests passing | 276 | - |
+| Plans completed | 26/27 (96%) | 27 total |
+| Tests passing | 308 | - |
 
 ---
 
