@@ -382,24 +382,35 @@ impl TypeExpander {
                     let item_path = self.get_path(&krate, *item_id);
                     let name = item.name.clone().unwrap_or_default();
 
-                    match &item.inner {
-                        ItemEnum::Struct(_)
-                        | ItemEnum::Enum(_)
-                        | ItemEnum::Union(_)
-                        | ItemEnum::TypeAlias(_)
-                        | ItemEnum::Trait(_)
-                        | ItemEnum::Function(_) => {
-                            // Add as module item
-                            let field_info = FieldInfo::new(name, item_path, false);
-                            node.add_field(field_info);
+                    // Determine item kind
+                    let kind = match &item.inner {
+                        ItemEnum::Struct(_) => "struct",
+                        ItemEnum::Enum(_) => "enum",
+                        ItemEnum::Union(_) => "union",
+                        ItemEnum::TypeAlias(_) => "type",
+                        ItemEnum::Trait(_) => "trait",
+                        ItemEnum::Function(_) => "function",
+                        ItemEnum::Module(_) => "module",
+                        ItemEnum::Constant { .. } => "const",
+                        ItemEnum::Static(_) => "static",
+                        ItemEnum::Macro(_) => "macro",
+                        ItemEnum::Use(_) => "use",
+                        _ => "other",
+                    };
+
+                    if kind == "module" {
+                        // Collect submodule IDs for later expansion
+                        if depth + 1 < self.depth_limit {
+                            submodules_to_expand.push(*item_id);
                         }
-                        ItemEnum::Module(_) => {
-                            // Collect submodule IDs for later expansion
-                            if depth + 1 < self.depth_limit {
-                                submodules_to_expand.push(*item_id);
-                            }
-                        }
-                        _ => {}
+                    } else {
+                        // Add as module item (not a field!)
+                        let module_item = crate::types::expand::ModuleItemInfo::new(
+                            name,
+                            kind.to_string(),
+                            item_path,
+                        );
+                        node.add_item(module_item);
                     }
                 }
             }

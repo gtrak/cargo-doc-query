@@ -110,7 +110,7 @@ pub struct TypeGraph {
 pub struct TypeNode {
     /// Fully qualified path
     pub id: String,
-    /// Type kind: struct, enum, primitive, generic, etc.
+    /// Type kind: struct, enum, module, primitive, generic, etc.
     pub kind: String,
     /// Fields (for struct-like types)
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -118,6 +118,9 @@ pub struct TypeNode {
     /// Variants (for enums)
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub variants: Vec<VariantInfo>,
+    /// Module items (for modules: types, functions, traits, etc.)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<ModuleItemInfo>,
     /// Generic parameters
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub generic_params: Vec<String>,
@@ -178,6 +181,17 @@ pub struct VariantInfo {
     pub discriminant: Option<String>,
 }
 
+/// Module item information (types, functions, traits, etc.)
+#[derive(Serialize, Debug, Clone)]
+pub struct ModuleItemInfo {
+    /// Item name
+    pub name: String,
+    /// Item kind: type, function, trait, macro, etc.
+    pub kind: String,
+    /// Item path
+    pub path: String,
+}
+
 impl TypeGraph {
     /// Create new type graph
     pub fn new(root: String, depth_limit: u32) -> Self {
@@ -229,6 +243,7 @@ impl TypeNode {
             kind,
             fields: Vec::new(),
             variants: Vec::new(),
+            items: Vec::new(),
             generic_params: Vec::new(),
             depth,
             field_count: None,
@@ -246,6 +261,11 @@ impl TypeNode {
         self.variants.push(variant);
     }
 
+    /// Add an item to this module
+    pub fn add_item(&mut self, item: ModuleItemInfo) {
+        self.items.push(item);
+    }
+
     /// Add a generic parameter
     pub fn add_generic_param(&mut self, param: String) {
         self.generic_params.push(param);
@@ -258,6 +278,7 @@ impl TypeNode {
             kind: self.kind.clone(),
             fields: Vec::new(),         // Omit field details
             variants: Vec::new(),       // Omit variant details
+            items: Vec::new(),          // Omit item details
             generic_params: Vec::new(), // Omit generic details
             depth: self.depth,
             field_count: Some(self.fields.len()),
@@ -311,5 +332,12 @@ impl VariantInfo {
     pub fn with_discriminant(mut self, discriminant: String) -> Self {
         self.discriminant = Some(discriminant);
         self
+    }
+}
+
+impl ModuleItemInfo {
+    /// Create a new module item info
+    pub fn new(name: String, kind: String, path: String) -> Self {
+        Self { name, kind, path }
     }
 }
