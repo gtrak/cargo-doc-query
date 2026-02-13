@@ -26,9 +26,19 @@ console = "0.15"
 
 # Signal handling
 ctrlc = "3.4"
+glob = "0.3.3"
+tempfile = "3.25"
+
+# Benchmark dependencies
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+glob = "0.3.3"
 
 # Testing dependencies
 proptest = "1.4"
 tempfile = "3.25"
-glob = "0.3.1"
+
+[[bench]]
+name = "filter_benchmark"
+harness = false
 # tarpaulin = "0.29"  # Temporarily disabled - not available on crates.io yet
