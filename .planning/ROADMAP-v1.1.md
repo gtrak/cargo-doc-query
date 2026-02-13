@@ -75,7 +75,10 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ## Phase 7: CLI Integration
 
+**Status:** ✅ Complete
+**Plans:** 3 plans
 **Goal:** Wire filter configuration through CLI to query execution
+**Completion Date:** 2026-02-13
 
 **Phase Goal:** Users can specify filter criteria via command-line flags that are passed through to the query engine.
 
@@ -85,10 +88,10 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ### Success Criteria (Observable Behaviors)
 
-1. **Filter flags are accepted:** CLI accepts `--include`, `--exclude`, `--kind`, `--crate`, `--visibility` flags without error
-2. **Filter config flows to query engine:** Filter configuration is correctly passed from CLI through Commands layer to QueryEngine
-3. **Existing flags remain functional:** `--minimal`, `--tokens`, `--depth` continue to work alongside new filter flags
-4. **Flag combinations are validated:** Invalid combinations (e.g., conflicting filters) produce helpful error messages
+1. **Filter flags are accepted:** CLI accepts `--include`, `--exclude`, `--kind`, `--crate`, `--visibility` flags without error ✅
+2. **Filter config flows to query engine:** Filter configuration is correctly passed from CLI through Commands layer to QueryEngine ✅
+3. **Existing flags remain functional:** `--minimal`, `--tokens`, `--depth` continue to work alongside new filter flags ✅
+4. **Flag combinations are validated:** Invalid combinations (e.g., conflicting filters) produce helpful error messages ✅
 
 ### Dependencies
 
@@ -97,9 +100,13 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ### Deliverables
 
-- Updated `Cli::Query` struct with filter flags
-- Modified `ExpandCommand::from_args()` to construct FilterConfig
-- Filter config wiring through to QueryEngine
+- Updated `Commands::Query` variant with 6 filter flags (-i/--include, -e/--exclude, -k/--kind, --crate, --visibility, --only) ✅
+- Modified `ExpandCommand::from_args()` to construct FilterConfig ✅
+- Filter config wiring through to FilterEngine ✅
+- Validation for conflicting flags (--include + --only) ✅
+- `--help-filters` flag with glob syntax documentation ✅
+- Enhanced error messages with examples and references ✅
+- FILTERING section in --help with real examples ✅
 
 ---
 
