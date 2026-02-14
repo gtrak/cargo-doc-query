@@ -1,8 +1,8 @@
 # Project State: cargo-doc-query
 
-**Milestone:** v1.1 Output Refinement — In progress
+**Milestone:** v1.1 Output Refinement — Complete
 **Current Phase:** 10 (final phase)
-**Status:** Planning complete, ready for execution
+**Status:** Phase complete
 **Last Updated:** 2026-02-14
 **Roadmap:** `.planning/ROADMAP-v1.1.md`
 
@@ -11,12 +11,11 @@
 ## Current Position
 
 **Phase:** 10 — Integration and Polish
-**Plan:** 1/2 plans completed (10-01)
-**Status:** In progress
-**Last activity:** 2026-02-14 — Completed 10-01: Integration tests
+**Plan:** 2/2 plans completed (10-01, 10-02)
+**Status:** Phase complete
+**Last activity:** 2026-02-14 — Completed 10-02: End-to-end tests and documentation
 
-Progress: ████████████████████████████████ 100% (Phase 9) | 33/33 (100%)
-Progress: ████████░░░░░░░░░░░░░░░░░░░░░░ 50% (Phase 10) | 1/2 (50%)
+Progress: ████████████████████████████████ 100% (Phase 9) | 100% (Phase 10) | 35/35 (100%)
 
 ---
 
@@ -48,7 +47,7 @@ Progress: ████████░░░░░░░░░░░░░░░�
 | 7. CLI Integration | ✅ Complete | 3/3 | FilterEngine wired to CLI with validation and help |
 | 8. Result Types | ✅ Complete | 7/7 | Rich metadata (visibility, generics), DetailLevel |
 | Phase 9 | ✅ Complete | 11/11 | Doc comments + consistent display, ItemFormatter |
-| Phase 10 | ○ In Progress | 1/2 | Integration tests, end-to-end validation |
+| Phase 10 | ✅ Complete | 2/2 | Integration tests, snapshot tests, README |
 
 **Requirements:** 25 total | **Coverage:** 100% mapped ✓
 
@@ -73,10 +72,20 @@ v1.1: Output refinement and UX improvements
 ## Session Continuity
 
 **Last session:** 2026-02-14
-**Stopped at:** Completed 10-01: Integration tests
-**Resume file:** .planning/phases/10-integration/10-01-SUMMARY.md
+**Stopped at:** Completed 10-02: End-to-end tests and documentation
+**Resume file:** .planning/phases/10-integration/10-02-SUMMARY.md
 
 ### Recent Context
+
+Completed plan 10-02 for end-to-end tests and documentation:
+- Added insta v1.46 snapshot testing dependency with yaml feature
+- Created tests/snapshots.rs with 12 snapshot tests
+- Tests verify output consistency for serde, anyhow, clap, glob crates
+- Tests verify JSON, minimal, detailed output formats
+- Tests verify filter combinations (include, exclude, kind)
+- All 12 snapshot tests pass
+- Created comprehensive README.md with all v1.1 features documented
+- Verified --help output is complete
 
 Completed plan 10-01 for integration tests:
 - Created filter_integration.rs with 12 tests (filter + depth/budget/minimal combinations)
