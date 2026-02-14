@@ -38,6 +38,7 @@ glob = "0.3.3"
 # Testing dependencies
 proptest = "1.4"
 tempfile = "3.25"
+insta = { version = "1.40", features = ["yaml"] }
 
 [[bench]]
 name = "filter_benchmark"
