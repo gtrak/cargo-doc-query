@@ -211,7 +211,8 @@ impl TypeExpander {
                             0,
                             self.extract_crate_name(&crate_name, &type_path),
                             visibility,
-                        );
+                        )
+                        .with_docs(item.docs.as_ref().map(|s| s.trim().to_string()));
 
                         // Extract function signature from function item
                         let signature = format_function_signature(&item, func);
@@ -319,7 +320,8 @@ impl TypeExpander {
             depth,
             crate_name,
             visibility,
-        );
+        )
+        .with_docs(item.docs.as_ref().map(|s| s.trim().to_string()));
 
         // Populate metadata based on DetailLevel
         let detail_level = self.detail_level;
@@ -491,7 +493,8 @@ impl TypeExpander {
             depth,
             self.extract_crate_name(crate_name, &module_path),
             visibility_to_string(&module_item.visibility),
-        );
+        )
+        .with_docs(module_item.docs.as_ref().map(|s| s.trim().to_string()));
         let mut submodules_to_expand: Vec<Id> = Vec::new();
 
         // Get module items

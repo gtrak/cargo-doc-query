@@ -157,6 +157,9 @@ pub struct TypeNode {
     /// Function ABI (None for Rust ABI)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub abi: Option<String>,
+    /// Documentation comments
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub docs: Option<String>,
 }
 
 /// Minimal version of TypeNode for reduced output
@@ -385,6 +388,7 @@ impl TypeNode {
             is_async: None,
             is_unsafe: None,
             abi: None,
+            docs: None,
         }
     }
 
@@ -413,6 +417,12 @@ impl TypeNode {
         self.is_async = Some(is_async);
         self.is_unsafe = Some(is_unsafe);
         self.abi = abi;
+        self
+    }
+
+    /// Set documentation from rustdoc Item::docs
+    pub fn with_docs(mut self, docs: Option<String>) -> Self {
+        self.docs = docs.map(|s| s.trim().to_string());
         self
     }
 
@@ -457,6 +467,7 @@ impl TypeNode {
             is_async: None,
             is_unsafe: None,
             abi: None,
+            docs: None,
         }
     }
 
