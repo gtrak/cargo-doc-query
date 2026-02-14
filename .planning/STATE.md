@@ -11,11 +11,12 @@
 ## Current Position
 
 **Phase:** 10 — Integration and Polish
-**Plan:** 2 plans created
-**Status:** Ready for execution
-**Last activity:** 2026-02-14 — Created 10-01-PLAN.md and 10-02-PLAN.md
+**Plan:** 1/2 plans completed (10-01)
+**Status:** In progress
+**Last activity:** 2026-02-14 — Completed 10-01: Integration tests
 
 Progress: ████████████████████████████████ 100% (Phase 9) | 33/33 (100%)
+Progress: ████████░░░░░░░░░░░░░░░░░░░░░░ 50% (Phase 10) | 1/2 (50%)
 
 ---
 
@@ -47,7 +48,7 @@ Progress: ███████████████████████�
 | 7. CLI Integration | ✅ Complete | 3/3 | FilterEngine wired to CLI with validation and help |
 | 8. Result Types | ✅ Complete | 7/7 | Rich metadata (visibility, generics), DetailLevel |
 | Phase 9 | ✅ Complete | 11/11 | Doc comments + consistent display, ItemFormatter |
-| 10. Integration | ○ Planning | 0 | End-to-end validation |
+| Phase 10 | ○ In Progress | 1/2 | Integration tests, end-to-end validation |
 
 **Requirements:** 25 total | **Coverage:** 100% mapped ✓
 
@@ -71,11 +72,18 @@ v1.1: Output refinement and UX improvements
 
 ## Session Continuity
 
-**Last session:** 2026-02-13 22:20 UTC
-**Stopped at:** Fixed format_expand_result_with_formatter to properly use ItemFormatter
-**Resume file:** .planning/phases/09-unified-rendering/09-VERIFICATION.md
+**Last session:** 2026-02-14
+**Stopped at:** Completed 10-01: Integration tests
+**Resume file:** .planning/phases/10-integration/10-01-SUMMARY.md
 
 ### Recent Context
+
+Completed plan 10-01 for integration tests:
+- Created filter_integration.rs with 12 tests (filter + depth/budget/minimal combinations)
+- Created error_paths.rs with 13 tests (invalid glob, empty results, conflicting flags)
+- Created feature_combinations.rs with 18 tests (multi-feature integration)
+- All 43 integration tests pass
+- Tests use std::process::Command to invoke actual cargo-doc-query binary
 
 Gap closure execution completed 09-04, 09-05, and 09-06:
 - 09-04: Wired DocHandler into ItemFormatter for doc truncation
@@ -244,6 +252,9 @@ v1.1 start with focus shift:
 - CLI filter flags use Vec<String> for multiple values
 - --only takes precedence over --include for include patterns
 - --kind values are normalized to lowercase (case-insensitive matching)
+- Phase 10-01: Integration tests use std::process::Command (black-box CLI testing)
+- Phase 10-01: Test files in tests/ directory for proper Rust integration test discovery
+- Phase 10-01: Tests accept graceful degradation (no cache/not found errors allowed)
 - crate_filter field name avoids Rust keyword conflict
 - PATH argument made optional to support --help-filters
 - Error messages follow 4-part format: what, why, example, reference
@@ -262,7 +273,7 @@ v1.1 start with focus shift:
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
 | Plans completed | 27/27 (100%) | 27 total |
-| Tests passing | 308 | - |
+| Tests passing | 308 + 43 integration | - |
 
 ---
 
