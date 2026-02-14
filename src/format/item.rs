@@ -67,6 +67,14 @@ impl FormattedItem {
             }
         }
 
+        // Documentation
+        if let Some(ref docs) = self.docs {
+            let doc_lines: Vec<&str> = docs.lines().collect();
+            for line in doc_lines {
+                output.push_str(&format!("  {}\n", line));
+            }
+        }
+
         // Deprecation
         if self.is_deprecated {
             output.push_str("  deprecated\n");
