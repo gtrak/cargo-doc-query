@@ -11,11 +11,11 @@
 ## Current Position
 
 **Phase:** 9 — Unified Rendering
-**Plan:** 5 of N in current phase
-**Status:** In progress
-**Last activity:** 2026-02-13 — Completed 09-05-SUMMARY.md
+**Plan:** 6 of 6 in current phase
+**Status:** Phase complete
+**Last activity:** 2026-02-13 — Completed 09-06-SUMMARY.md
 
-Progress: █████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 14% (Phase 9) | 32/33 (97%)
+Progress: ████████████████████████████████ 100% (Phase 9) | 33/33 (100%)
 
 ---
 
@@ -45,8 +45,8 @@ Progress: █████████░░░░░░░░░░░░░░�
 |-------|--------|--------------|-----------------|
 | 6. Foundation | ✅ Complete | 2/2 | FilterEngine with glob matching, validation, stats |
 | 7. CLI Integration | ✅ Complete | 3/3 | FilterEngine wired to CLI with validation and help |
-| 8. Result Types | ○ Pending | 7 | Rich metadata (visibility, generics) |
-| 9. Unified Rendering | ○ Pending | 11 | Doc comments + consistent display |
+| 8. Result Types | ✅ Complete | 7/7 | Rich metadata (visibility, generics), DetailLevel |
+| 9. Unified Rendering | ✅ Complete | 11/11 | Doc comments + consistent display, ItemFormatter |
 | 10. Integration | ○ Pending | 0 | End-to-end validation |
 
 **Requirements:** 25 total | **Coverage:** 100% mapped ✓
@@ -77,12 +77,20 @@ v1.1: Output refinement and UX improvements
 
 ### Recent Context
 
-Gap closure execution completed 09-04 and 09-05:
+Gap closure execution completed 09-04, 09-05, and 09-06:
 - 09-04: Wired DocHandler into ItemFormatter for doc truncation
 - 09-05: Wired unified formatter into CLI expand command
-- Verifier found format_expand_result_with_formatter used old renderer
-- Fixed: Now properly converts TypeNode to FormattedItem and uses BudgetTracker
-- All 308 tests pass, 5/7 must-haves verified
+- 09-06: Added docs field to TypeNode, wired into formatter, used ItemFormatter rendering
+- All 308 tests pass, verification gaps closed
+
+Completed plan 09-06 for gap closure:
+- Added docs: Option<String> field to TypeNode struct
+- Added with_docs() builder method to populate from item.docs
+- Updated to_minimal() to clear docs field
+- Wired docs extraction into 3 TypeNode creation sites
+- Changed format_expand_result_with_formatter to use node.docs.clone()
+- Added FormattedItem::render() method
+- Updated to use render() instead of manual println! calls
 
 Completed plan 09-05 for CLI integration:
 - Added import for format_expand_result_with_formatter and format_with_item_formatter
@@ -227,6 +235,7 @@ v1.1 start with focus shift:
 - Phase 09-03: Warning threshold default 0.8 (80%)
 - Phase 09-03: estimate_item_tokens() uses rough calculation: 20 base + 5/field + 5/variant + 10/nested + docs/4
 - Phase 09-05: Unified formatter wired to CLI expand command with DetailLevel and token budget
+- Phase 09-06: Added FormattedItem::render() method for unified rendering pipeline
 - v1.1 focus: Output quality over infrastructure
 - v2.0 will address shared cache, stdlib, and GC
 - FilterEngine uses glob@0.3.3 for pattern matching
@@ -252,7 +261,7 @@ v1.1 start with focus shift:
 | Build time (small project) | <5s | <5s |
 | Requirements implemented | 18/18 v1.0 | v1.1 TBD |
 | Milestones complete | 1/1 | 1 in progress |
-| Plans completed | 26/27 (96%) | 27 total |
+| Plans completed | 27/27 (100%) | 27 total |
 | Tests passing | 308 | - |
 
 ---
