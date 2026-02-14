@@ -617,34 +617,29 @@ impl FilterEngine {
         }
 
         // 1. Must not match any exclude pattern (fail fast - most restrictive)
-        if !self.exclude.is_empty()
-            && self.exclude.iter().any(|p| p.matches(path)) {
-                return false;
-            }
+        if !self.exclude.is_empty() && self.exclude.iter().any(|p| p.matches(path)) {
+            return false;
+        }
 
         // 2. Must match kind filter (case insensitive)
-        if !self.kinds.is_empty()
-            && !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
-                return false;
-            }
+        if !self.kinds.is_empty() && !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
+            return false;
+        }
 
         // 3. Must match crate filter
-        if !self.crates.is_empty()
-            && !self.crates.iter().any(|c| c == crate_name) {
-                return false;
-            }
+        if !self.crates.is_empty() && !self.crates.iter().any(|c| c == crate_name) {
+            return false;
+        }
 
         // 4. Must match visibility filter
-        if !self.visibilities.is_empty()
-            && !self.visibilities.iter().any(|v| v == visibility) {
-                return false;
-            }
+        if !self.visibilities.is_empty() && !self.visibilities.iter().any(|v| v == visibility) {
+            return false;
+        }
 
         // 5. Must match at least one include pattern (most expensive - last)
-        if !self.include.is_empty()
-            && !self.include.iter().any(|p| p.matches(path)) {
-                return false;
-            }
+        if !self.include.is_empty() && !self.include.iter().any(|p| p.matches(path)) {
+            return false;
+        }
 
         true
     }
@@ -655,8 +650,10 @@ impl FilterEngine {
         items: &'a [T],
     ) -> (Vec<&'a T>, FilterStats) {
         let start = Instant::now();
-        let mut stats = FilterStats::default();
-        stats.total_checked = items.len();
+        let mut stats = FilterStats {
+            total_checked: items.len(),
+            ..Default::default()
+        };
 
         let mut passed = Vec::new();
 
@@ -701,10 +698,9 @@ impl FilterEngine {
         visibility: &str,
     ) -> (bool, Option<RejectionReason>) {
         // Must match at least one include pattern
-        if !self.include.is_empty()
-            && !self.include.iter().any(|p| p.matches(path)) {
-                return (false, Some(RejectionReason::Include));
-            }
+        if !self.include.is_empty() && !self.include.iter().any(|p| p.matches(path)) {
+            return (false, Some(RejectionReason::Include));
+        }
 
         // Must not match any exclude pattern
         if self.exclude.iter().any(|p| p.matches(path)) {
@@ -712,22 +708,19 @@ impl FilterEngine {
         }
 
         // Must match kind filter
-        if !self.kinds.is_empty()
-            && !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
-                return (false, Some(RejectionReason::Kind));
-            }
+        if !self.kinds.is_empty() && !self.kinds.iter().any(|k| k == &kind.to_lowercase()) {
+            return (false, Some(RejectionReason::Kind));
+        }
 
         // Must match crate filter
-        if !self.crates.is_empty()
-            && !self.crates.iter().any(|c| c == crate_name) {
-                return (false, Some(RejectionReason::Crate));
-            }
+        if !self.crates.is_empty() && !self.crates.iter().any(|c| c == crate_name) {
+            return (false, Some(RejectionReason::Crate));
+        }
 
         // Must match visibility filter
-        if !self.visibilities.is_empty()
-            && !self.visibilities.iter().any(|v| v == visibility) {
-                return (false, Some(RejectionReason::Visibility));
-            }
+        if !self.visibilities.is_empty() && !self.visibilities.iter().any(|v| v == visibility) {
+            return (false, Some(RejectionReason::Visibility));
+        }
 
         (true, None)
     }

@@ -81,7 +81,7 @@ pub struct TraitResult {
 }
 
 /// Result of a module query
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Default)]
 pub struct ModuleResult {
     /// Module items (types, traits, functions, etc.)
     #[serde(skip_serializing_if = "Vec::is_empty")]
