@@ -11,10 +11,10 @@
 
 Unified rendering across all item types and depths.
 
-- [ ] **REND-01**: All 24 ItemKind variants render with consistent formatting
-- [ ] **REND-02**: Single `format_item()` dispatcher handles all item types
-- [ ] **REND-03**: Depth-aware formatting (root=full details, nested=condensed, minimal=signatures only)
-- [ ] **REND-04**: Token budget integrated at rendering layer (tracks per-item overhead)
+- [x] **REND-01**: All 24 ItemKind variants render with consistent formatting
+- [x] **REND-02**: Single `format_item()` dispatcher handles all item types
+- [x] **REND-03**: Depth-aware formatting (root=full details, nested=condensed, minimal=signatures only)
+- [x] **REND-04**: Token budget integrated at rendering layer (tracks per-item overhead)
 
 ### Filtering (FILT)
 
@@ -32,25 +32,25 @@ Robust pattern-based filtering for precise queries.
 
 Doc comment extraction with token-aware display.
 
-- [ ] **DOCS-01**: Doc comments extracted from `Item::docs` field
-- [ ] **DOCS-02**: Doc comments display in standard output mode
-- [ ] **DOCS-03**: Doc comments omitted in minimal mode to save tokens
-- [ ] **DOCS-04**: Smart truncation at sentence boundaries when budget exceeded
-- [ ] **DOCS-05**: Code blocks preserved over prose during truncation
-- [ ] **DOCS-06**: Truncated docs show "..." indicator with warning
-- [ ] **DOCS-07**: Token budget enforcement includes doc comment tokens
+- [x] **DOCS-01**: Doc comments extracted from `Item::docs` field
+- [x] **DOCS-02**: Doc comments display in standard output mode
+- [x] **DOCS-03**: Doc comments omitted in minimal mode to save tokens
+- [x] **DOCS-04**: Smart truncation at sentence boundaries when budget exceeded
+- [x] **DOCS-05**: Code blocks preserved over prose during truncation
+- [x] **DOCS-06**: Truncated docs show "..." indicator with warning
+- [x] **DOCS-07**: Token budget enforcement includes doc comment tokens
 
 ### Additional Fields (FIELD)
 
 Expose rich metadata from rustdoc JSON.
 
-- [ ] **FIELD-01**: Visibility modifiers displayed (pub, pub(crate), pub(super), pub(in path))
-- [ ] **FIELD-02**: Deprecation status shown with replacement hints when available
-- [ ] **FIELD-03**: Generic parameters and bounds displayed for structs, enums, functions
-- [ ] **FIELD-04**: Key attributes shown: #[must_use], #[non_exhaustive], #[deprecated]
-- [ ] **FIELD-05**: Function modifiers displayed: const, unsafe, async, ABI info
-- [ ] **FIELD-06**: New fields omitted in minimal mode for token efficiency
-- [ ] **FIELD-07**: JSON output includes all new fields with backward-compatible schema
+- [x] **FIELD-01**: Visibility modifiers displayed (pub, pub(crate), pub(super), pub(in path))
+- [x] **FIELD-02**: Deprecation status shown with replacement hints when available
+- [x] **FIELD-03**: Generic parameters and bounds displayed for structs, enums, functions
+- [x] **FIELD-04**: Key attributes shown: #[must_use], #[non_exhaustive], #[deprecated]
+- [x] **FIELD-05**: Function modifiers displayed: const, unsafe, async, ABI info
+- [x] **FIELD-06**: New fields omitted in minimal mode for token efficiency
+- [x] **FIELD-07**: JSON output includes all new fields with backward-compatible schema
 
 ---
 
@@ -96,24 +96,24 @@ Explicitly excluded from v1.1.
 | FILT-05 | Phase 6 | Complete |
 | FILT-06 | Phase 6 | Complete |
 | FILT-07 | Phase 6 | Complete |
-| FIELD-01 | Phase 8 | Pending |
-| FIELD-02 | Phase 8 | Pending |
-| FIELD-03 | Phase 8 | Pending |
-| FIELD-04 | Phase 8 | Pending |
-| FIELD-05 | Phase 8 | Pending |
-| FIELD-06 | Phase 8 | Pending |
-| FIELD-07 | Phase 8 | Pending |
-| REND-01 | Phase 9 | Pending |
-| REND-02 | Phase 9 | Pending |
-| REND-03 | Phase 9 | Pending |
-| REND-04 | Phase 9 | Pending |
-| DOCS-01 | Phase 9 | Pending |
-| DOCS-02 | Phase 9 | Pending |
-| DOCS-03 | Phase 9 | Pending |
-| DOCS-04 | Phase 9 | Pending |
-| DOCS-05 | Phase 9 | Pending |
-| DOCS-06 | Phase 9 | Pending |
-| DOCS-07 | Phase 9 | Pending |
+| FIELD-01 | Phase 8 | Complete |
+| FIELD-02 | Phase 8 | Complete |
+| FIELD-03 | Phase 8 | Complete |
+| FIELD-04 | Phase 8 | Complete |
+| FIELD-05 | Phase 8 | Complete |
+| FIELD-06 | Phase 8 | Complete |
+| FIELD-07 | Phase 8 | Complete |
+| REND-01 | Phase 9 | Complete |
+| REND-02 | Phase 9 | Complete |
+| REND-03 | Phase 9 | Complete |
+| REND-04 | Phase 9 | Complete |
+| DOCS-01 | Phase 9 | Complete |
+| DOCS-02 | Phase 9 | Complete |
+| DOCS-03 | Phase 9 | Complete |
+| DOCS-04 | Phase 9 | Complete |
+| DOCS-05 | Phase 9 | Complete |
+| DOCS-06 | Phase 9 | Complete |
+| DOCS-07 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 25 total
@@ -125,9 +125,9 @@ Explicitly excluded from v1.1.
 - Phase 7 (CLI Integration): 0 requirements (implements Phase 6 deliverables)
 - Phase 8 (Result Type Extensions): 7 requirements (FIELD-01..07)
 - Phase 9 (Unified Rendering + Docs): 11 requirements (REND-01..04, DOCS-01..07)
-- Phase 10 (Integration + Polish): 0 requirements (validates all previous)
+- Phase 10 (Integration + Polish): 0 requirements (validates all previous) ✓
 
 ---
 
 *Requirements defined: 2026-02-13*
-*Last updated: 2026-02-13 after v1.1 scope definition*
+*Last updated: 2026-02-14 after v1.1 complete*

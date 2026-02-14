@@ -233,6 +233,9 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 **Phase Goal:** All v1.1 features work together reliably with acceptable performance and clear error handling.
 
+**Status:** ✅ Complete — 2 plans executed
+**Completion Date:** 2026-02-14
+
 ### Requirements
 
 *No new requirements — validates and polishes REND-01..04, FILT-01..07, DOCS-01..07, FIELD-01..07*
@@ -259,8 +262,8 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 
 ### Plans
 
-- [ ] **10-01**: Integration tests for filter combinations, error paths, feature combinations
-- [ ] **10-02**: End-to-end tests with real crates, snapshot testing, documentation updates
+- [x] **10-01**: Integration tests for filter combinations, error paths, feature combinations
+- [x] **10-02**: End-to-end tests with real crates, snapshot testing, documentation updates
 
 ---
 
@@ -291,7 +294,7 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 | Phase 7 | ✅ Complete | 0 (implements Phase 6) | 4/4 |
 | Phase 8 | ✅ Complete | 8 (FIELD-01..08) | 8/8 |
 | Phase 9 | ✅ Complete | 11 (REND-01..04, DOCS-01..07) | 7/7 |
-| Phase 10 | 🔴 Planning | 0 (integration) | 0/5 |
+| Phase 10 | ✅ Complete | 0 (integration) | 5/5 |
 
 ---
 
