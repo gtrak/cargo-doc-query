@@ -17,7 +17,7 @@ impl DocExtractor {
     ///
     /// Public items have default visibility.
     /// TODO: Handle specific visibility flags when needed for --include=private
-    pub fn extract_visibility(item: &Item) -> bool {
+    pub fn extract_visibility(_item: &Item) -> bool {
         // Public items have default visibility
         // This is a placeholder that may need refinement based on rustdoc-types visibility field
         true

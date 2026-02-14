@@ -11,8 +11,7 @@ use crate::parser::serde_helper::deserialize_with_stack;
 use crate::query::lookup::PathResolver;
 use crate::types::detail::DetailLevel;
 use crate::types::detail::{
-    extract_deprecation_info, extract_function_modifiers, extract_semantic_attrs, format_generics,
-    visibility_to_string,
+    extract_deprecation_info, extract_semantic_attrs, format_generics, visibility_to_string,
 };
 use crate::types::expand::{ExpansionResult, FieldInfo, TokenConfig, TypeGraph, TypeNode};
 
@@ -122,7 +121,8 @@ impl TypeExpander {
     }
 
     /// Check if adding more tokens would exceed budget
-    fn would_exceed_budget(&self, additional_tokens: usize) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn would_exceed_budget(&self, additional_tokens: usize) -> bool {
         match self.token_config.budget {
             None => false,
             Some(budget) => self.current_token_count + additional_tokens > budget,
@@ -130,7 +130,8 @@ impl TypeExpander {
     }
 
     /// Check if approaching budget warning threshold
-    fn is_approaching_budget(&self) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_approaching_budget(&self) -> bool {
         match self.token_config.budget {
             None => false,
             Some(budget) => {
@@ -648,7 +649,7 @@ impl TypeExpander {
 }
 
 /// Format a function's signature from its rustdoc item (without the function name)
-fn format_function_signature(item: &Item, func: &rustdoc_types::Function) -> String {
+fn format_function_signature(_item: &Item, func: &rustdoc_types::Function) -> String {
     let mut sig_parts = Vec::new();
 
     // Generic parameters

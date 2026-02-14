@@ -1,6 +1,5 @@
 // Type formatting and signature extraction
 
-use crate::types::doc::DocExtractor;
 use rustdoc_types::{Abi, FunctionPointer, FunctionSignature, GenericParamDef, Type};
 
 pub struct TypeFormatter;

@@ -198,7 +198,7 @@ impl QueryEngine {
             .index
             .nodes
             .iter()
-            .filter(|n| crate_filter.map_or(true, |f| n.name == f))
+            .filter(|n| crate_filter.is_none_or(|f| n.name == f))
             .map(|n| (n.name.clone(), n.version.clone()))
             .collect();
         crates_to_search.sort_by(|a, b| a.0.cmp(&b.0));
@@ -244,17 +244,17 @@ impl QueryEngine {
                 }
 
                 // FIELD-03: Generics (Standard and Detailed)
-                if detail_level.includes_generics() {
-                    if let Some(generics) = Self::extract_generics_from_item(item) {
-                        query_match = query_match.with_generics(generics);
-                    }
+                if detail_level.includes_generics()
+                    && let Some(generics) = Self::extract_generics_from_item(item)
+                {
+                    query_match = query_match.with_generics(generics);
                 }
 
                 // FIELD-02, FIELD-04: Deprecation and Attributes (Detailed only)
-                if detail_level.includes_deprecation() {
-                    if let Some((_, note)) = extract_deprecation_info(item.deprecation.as_ref()) {
-                        query_match = query_match.with_deprecation(note);
-                    }
+                if detail_level.includes_deprecation()
+                    && let Some((_, note)) = extract_deprecation_info(item.deprecation.as_ref())
+                {
+                    query_match = query_match.with_deprecation(note);
                 }
 
                 if detail_level.includes_attributes() {
@@ -541,7 +541,7 @@ impl QueryEngine {
     fn extract_module_result(
         &self,
         krate: &Crate,
-        module_id: Id,
+        _module_id: Id,
         item: &Item,
         _options: &QueryOptions,
     ) -> Result<ModuleResult> {

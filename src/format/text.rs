@@ -39,12 +39,10 @@ pub fn format_query_response_with_suggestions(
         );
 
         // Show suggestions if provided
-        if let Some(sugs) = suggestions {
-            if !sugs.is_empty() {
-                println!("\nDid you mean:");
-                for suggestion in sugs {
-                    println!("  • {}", style(suggestion).yellow());
-                }
+        if let Some(sugs) = suggestions && !sugs.is_empty() {
+            println!("\nDid you mean:");
+            for suggestion in sugs {
+                println!("  • {}", style(suggestion).yellow());
             }
         }
 
@@ -152,19 +150,17 @@ fn format_module_result(module_result: &crate::types::query::ModuleResult) {
     ];
 
     for kind in &kind_order {
-        if let Some(items) = items_by_kind.get(*kind) {
-            if !items.is_empty() {
-                println!(
-                    "\n  {} ({}):",
-                    style(format!("{:?}", kind)).bold(),
-                    items.len()
-                );
-                for item in items {
-                    if item.name.is_empty() {
-                        println!("    • {}", style(&item.path).dim());
-                    } else {
-                        println!("    • {}: {}", style(&item.name).yellow(), item.path);
-                    }
+        if let Some(items) = items_by_kind.get(*kind) && !items.is_empty() {
+            println!(
+                "\n  {} ({}):",
+                style(format!("{:?}", kind)).bold(),
+                items.len()
+            );
+            for item in items {
+                if item.name.is_empty() {
+                    println!("    • {}", style(&item.path).dim());
+                } else {
+                    println!("    • {}: {}", style(&item.name).yellow(), item.path);
                 }
             }
         }
@@ -437,7 +433,7 @@ pub fn format_expand_result_with_formatter(
     }
 
     let mut tracker = BudgetTracker::new(token_budget);
-    let _formatter = ItemFormatter::new(detail_level.clone(), token_budget);
+    let _formatter = ItemFormatter::new(detail_level, token_budget);
 
     // Collect nodes by depth
     let mut nodes_by_depth: std::collections::HashMap<u32, Vec<&crate::types::expand::TypeNode>> =

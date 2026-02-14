@@ -72,10 +72,8 @@ impl FormattedItem {
         }
 
         // Visibility
-        if let Some(ref vis) = self.visibility {
-            if vis != "private" {
-                output.push_str(&format!("  {}\n", vis));
-            }
+        if let Some(ref vis) = self.visibility && vis != "private" {
+            output.push_str(&format!("  {}\n", vis));
         }
 
         // Documentation
@@ -141,7 +139,6 @@ pub struct FunctionModifiers {
 pub struct ItemFormatter {
     detail_level: DetailLevel,
     token_budget: Option<usize>,
-    current_tokens: usize,
 }
 
 impl ItemFormatter {
@@ -150,7 +147,6 @@ impl ItemFormatter {
         Self {
             detail_level,
             token_budget,
-            current_tokens: 0,
         }
     }
 
@@ -172,7 +168,6 @@ impl ItemFormatter {
         let docs = raw_docs.and_then(|d| doc_handler.format_docs(&d));
         let (is_deprecated, deprecation_note) = if self.detail_level.includes_deprecation() {
             extract_deprecation_info(item.deprecation.as_ref())
-                .map(|(b, n)| (b, n))
                 .unwrap_or((false, None))
         } else {
             (false, None)
@@ -314,7 +309,7 @@ impl ItemFormatter {
             ItemEnum::Union(_) => (None, vec![], vec![], vec![], None, None),
             // Use
             ItemEnum::Use(_) => {
-                let sig = format!("use ...");
+                let sig = "use ...".to_string();
                 (Some(sig), vec![], vec![], vec![], None, None)
             }
             // Default case

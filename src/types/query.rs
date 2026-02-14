@@ -1,6 +1,5 @@
 // JSON output schema types for query responses
 
-use serde::ser::SerializeSeq;
 use serde::Serialize;
 
 /// Top-level query response
@@ -159,11 +158,6 @@ pub struct TraitImplOutput {
 /// Helper function for skipping false values
 pub(crate) fn is_false(b: &bool) -> bool {
     !b
-}
-
-/// Helper function for skipping empty vectors
-pub(crate) fn is_empty<T>(v: &[T]) -> bool {
-    v.is_empty()
 }
 
 impl QueryResponse {
@@ -430,9 +424,9 @@ impl MethodOutput {
             return_type: self.return_type.clone(),
             visibility: self.visibility.clone(),
             is_public: self.is_public,
-            docs: None,                                                    // Omit docs
-            is_trait_method: self.is_trait_method && self.is_trait_method, // Only keep if true
-            is_const: None, // FIELD-06: omitted in minimal mode
+            docs: None,                            // Omit docs
+            is_trait_method: self.is_trait_method, // Only keep if true
+            is_const: None,                        // FIELD-06: omitted in minimal mode
             is_async: None,
             is_unsafe: None,
             abi: None,

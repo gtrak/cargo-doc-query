@@ -1,0 +1,4 @@
+# Clippy configuration for cargo-doc-query
+# Focus on catching real bugs, not style issues
+
+msrv = "1.75"
