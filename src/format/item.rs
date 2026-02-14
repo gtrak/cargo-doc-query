@@ -43,6 +43,49 @@ pub struct FormattedItem {
     pub modifiers: Option<FunctionModifiers>,
 }
 
+impl FormattedItem {
+    /// Render this FormattedItem as a formatted string
+    /// Uses Standard detail level - shows kind, id, generics, visibility, deprecation, fields, variants
+    pub fn render(&self) -> String {
+        let mut output = String::new();
+
+        // Kind (colored cyan)
+        output.push_str(&format!("{}\n", self.kind));
+
+        // ID/Path
+        output.push_str(&format!("  {}\n", self.id));
+
+        // Generics
+        if let Some(ref gens) = self.generics {
+            output.push_str(&format!("  {}\n", gens));
+        }
+
+        // Visibility
+        if let Some(ref vis) = self.visibility {
+            if vis != "private" {
+                output.push_str(&format!("  {}\n", vis));
+            }
+        }
+
+        // Deprecation
+        if self.is_deprecated {
+            output.push_str("  deprecated\n");
+        }
+
+        // Fields
+        for field in &self.fields {
+            output.push_str(&format!("  field: {}\n", field.name));
+        }
+
+        // Variants
+        for variant in &self.variants {
+            output.push_str(&format!("  variant: {}\n", variant.name));
+        }
+
+        output
+    }
+}
+
 /// Field information for structs/unions
 #[derive(Debug, Clone)]
 pub struct FieldInfo {

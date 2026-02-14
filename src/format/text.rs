@@ -527,25 +527,10 @@ pub fn format_expand_result_with_formatter(
                 let (_remaining, action) = tracker.track_item(estimated, doc_tokens);
 
                 if action == TruncationAction::Include {
-                    // Print the formatted item
-                    println!("{}{}", prefix, style(formatted.kind.as_str()).cyan());
-                    println!("{}  {}", prefix, formatted.id);
-                    if let Some(ref gens) = formatted.generics {
-                        println!("{}  {}", prefix, gens);
-                    }
-                    if let Some(ref vis) = formatted.visibility {
-                        if vis != "private" {
-                            println!("{}  {}", prefix, style(vis.as_str()).dim());
-                        }
-                    }
-                    if formatted.is_deprecated {
-                        println!("{}  {}", prefix, style("deprecated").yellow());
-                    }
-                    for field in &formatted.fields {
-                        println!("{}  {}: {}", prefix, style("field").dim(), field.name);
-                    }
-                    for variant in &formatted.variants {
-                        println!("{}  {}: {}", prefix, style("variant").dim(), variant.name);
+                    // Print the formatted item using render method
+                    let rendered = formatted.render();
+                    for line in rendered.lines() {
+                        println!("{}{}", prefix, line);
                     }
                 }
             }
