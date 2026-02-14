@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use postcard::{from_bytes, to_stdvec};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+#[cfg(test)]
 use tempfile::TempDir;
 
 /// Serializable index for disk storage
