@@ -479,7 +479,7 @@ pub fn format_expand_result_with_formatter(
                     } else {
                         Some(format!("<{}>", node.generic_params.join(", ")))
                     },
-                    docs: None, // TypeNode doesn't have docs field
+                    docs: node.docs.clone(),
                     fields: node
                         .fields
                         .iter()
