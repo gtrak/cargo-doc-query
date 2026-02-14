@@ -257,6 +257,11 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - End-to-end tests with real crates
 - Documentation updates
 
+### Plans
+
+- [ ] **10-01**: Integration tests for filter combinations, error paths, feature combinations
+- [ ] **10-02**: End-to-end tests with real crates, snapshot testing, documentation updates
+
 ---
 
 ## Requirement Coverage Summary
@@ -281,12 +286,12 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 ## Progress Tracking
 
 | Phase | Status | Requirements | Success Criteria Met |
-|-------|--------|----------------|---------------------|
+|-------|--------|--------------|---------------------|
 | Phase 6 | ✅ Complete | 7 (FILT-01..07) | 4/4 |
 | Phase 7 | ✅ Complete | 0 (implements Phase 6) | 4/4 |
 | Phase 8 | ✅ Complete | 8 (FIELD-01..08) | 8/8 |
-| Phase 9 | 🔴 Not Started | 11 (REND-01..04, DOCS-01..07) | 0/7 | 3 plans
-| Phase 10 | 🔴 Not Started | 0 (integration) | 0/5 |
+| Phase 9 | ✅ Complete | 11 (REND-01..04, DOCS-01..07) | 7/7 |
+| Phase 10 | 🔴 Planning | 0 (integration) | 0/5 |
 
 ---
 
