@@ -297,7 +297,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
                             crate::query::expand::ExpandError::NotFound(p) => {
                                 // Show suggestions for similar types
                                 if !quiet && !json {
-                                    if let Ok(suggestions) = suggest_similar_types(&path) {
+                                    if let Ok(suggestions) = suggest_similar_types(path) {
                                         if !suggestions.is_empty() {
                                             eprintln!("\nDid you mean:");
                                             for suggestion in suggestions {

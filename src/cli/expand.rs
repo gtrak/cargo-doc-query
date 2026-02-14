@@ -5,10 +5,10 @@ use clap::Parser;
 use std::time::Instant;
 
 use crate::cli::Command;
-use crate::format::text::{format_expand_result_with_formatter, format_with_item_formatter};
+use crate::format::text::format_expand_result_with_formatter;
 use crate::types::detail::DetailLevel;
 use crate::types::expand::TokenConfig;
-use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
+use crate::types::filter::{FilterEngine, FilterError};
 
 /// Check if a visibility string is valid
 fn is_valid_visibility(vis: &str) -> bool {
@@ -248,7 +248,7 @@ impl ExpandCommand {
     /// If --only is specified, it takes precedence over --include.
     /// Otherwise, --include is used as the include pattern.
     fn filter_config(&self) -> crate::types::filter::FilterConfig {
-        let include_pattern = self.only.as_ref().map(|s| s.as_str());
+        let include_pattern = self.only.as_deref();
 
         let mut config = crate::types::filter::FilterConfig::default();
         if let Some(pattern) = include_pattern {
@@ -402,7 +402,7 @@ impl ExpandCommand {
         }
 
         // Apply filters if configured
-        let config = self.filter_config();
+        let _config = self.filter_config();
         if self.has_filters() {
             self.apply_filters(&mut expansion);
         }
@@ -480,8 +480,7 @@ impl ExpandCommand {
 
         // Update expansion with filtered nodes
         expansion.graph.nodes = filtered_nodes
-            .into_iter()
-            .map(|node| node.clone())
+            .into_iter().cloned()
             .collect();
 
         // Display stats if not in quiet mode
@@ -499,7 +498,7 @@ impl ExpandCommand {
         // Store detail level in the expansion context
         // For now, we set the detailed field based on whether detail_level is not minimal
         // The actual detail_level will be passed through to the expand engine
-        let mut cmd = Self {
+        let cmd = Self {
             path: self.path.clone(),
             depth: self.depth,
             crate_name: self.crate_name.clone(),

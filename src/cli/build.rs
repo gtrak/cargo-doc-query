@@ -138,7 +138,7 @@ impl BuildCommand {
                             for filename in filenames {
                                 if let Some(path) = filename.as_str() {
                                     let path = PathBuf::from(path);
-                                    if path.extension().map_or(false, |ext| ext == "json") {
+                                    if path.extension().is_some_and(|ext| ext == "json") {
                                         // Extract crate name from filename (e.g., "serde.json" -> "serde")
                                         if let Some(stem) = path.file_stem() {
                                             let name = stem.to_string_lossy().to_string();
@@ -194,7 +194,7 @@ impl BuildCommand {
         for entry in entries {
             let path = entry.path();
 
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 if let Some(stem) = path.file_stem() {
                     let name = stem.to_string_lossy().to_string();
                     // Skip internal files

@@ -3,8 +3,7 @@
 // Provides high-level command execution that bridges CLI arguments
 // with the query engines, handling DetailLevel propagation.
 
-use anyhow::{Context, Result};
-use std::time::Instant;
+use anyhow::Result;
 
 use crate::cache::store::CacheStore;
 use crate::cli::args::{Args, Commands as ArgsCommands};
@@ -14,7 +13,6 @@ use crate::cli::Command;
 use crate::error::errors::AppError;
 use crate::types::detail::DetailLevel;
 use crate::types::expand::TokenConfig;
-use crate::types::filter::{FilterConfig, FilterEngine, FilterError};
 
 /// Execute the appropriate command based on parsed CLI arguments
 pub fn execute(args: Args, quiet: bool, no_color: bool) -> Result<(), AppError> {
@@ -123,7 +121,7 @@ fn execute_query(
     let depth = if depth == 0 { 1 } else { depth };
 
     // Create token config with DetailLevel awareness
-    let token_config = TokenConfig::new().with_budget(tokens).with_minimal(minimal);
+    let _token_config = TokenConfig::new().with_budget(tokens).with_minimal(minimal);
 
     let mut cmd = ExpandCommand::from_args_with_detail(
         path.clone(),
