@@ -60,7 +60,7 @@ impl TypeFormatter {
             Type::ImplTrait(bounds) => {
                 let bounds_str: Vec<String> = bounds
                     .iter()
-                    .map(|b| Self::format_generic_bound(b))
+                    .map(Self::format_generic_bound)
                     .collect();
                 format!("impl {}", bounds_str.join(" + "))
             }

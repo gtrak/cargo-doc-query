@@ -11,10 +11,12 @@ use rustdoc_types::{
 
 /// Level of detail for metadata display
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DetailLevel {
     /// Minimal mode: signatures only, no metadata
     Minimal,
     /// Standard mode: signatures + visibility + generics (default)
+    #[default]
     Standard,
     /// Detailed mode: full metadata including attributes, deprecation, function modifiers
     Detailed,
@@ -71,11 +73,6 @@ impl DetailLevel {
     }
 }
 
-impl Default for DetailLevel {
-    fn default() -> Self {
-        Self::Standard
-    }
-}
 
 /// Convert visibility to display string
 ///
@@ -127,7 +124,7 @@ pub fn format_generics(generics: &Generics) -> Option<String> {
         let where_clauses: Vec<String> = generics
             .where_predicates
             .iter()
-            .map(|wp| format_where_predicate(wp))
+            .map(format_where_predicate)
             .collect();
         result.push_str(" where ");
         result.push_str(&where_clauses.join(", "));
@@ -160,7 +157,7 @@ fn format_generic_param(param: &GenericParamDef) -> String {
             // Add bounds: T: Clone + Debug
             if !bounds.is_empty() {
                 let bound_strings: Vec<String> =
-                    bounds.iter().map(|b| format_generic_bound(b)).collect();
+                    bounds.iter().map(format_generic_bound).collect();
                 result.push_str(": ");
                 result.push_str(&bound_strings.join(" + "));
             }
@@ -210,7 +207,7 @@ fn format_generic_bound(bound: &GenericBound) -> String {
                 // Handle HRTBs: for<'a> Trait<'a>
                 let params: Vec<String> = generic_params
                     .iter()
-                    .map(|p| format_generic_param(p))
+                    .map(format_generic_param)
                     .collect();
                 format!("for<{}> {}", params.join(", "), trait_path)
             }
@@ -235,7 +232,7 @@ fn format_where_predicate(wp: &WherePredicate) -> String {
             generic_params,
         } => {
             let type_str = format_type_simple(type_);
-            let bound_strs: Vec<String> = bounds.iter().map(|b| format_generic_bound(b)).collect();
+            let bound_strs: Vec<String> = bounds.iter().map(format_generic_bound).collect();
             let bounds_str = bound_strs.join(" + ");
 
             if generic_params.is_empty() {
@@ -243,7 +240,7 @@ fn format_where_predicate(wp: &WherePredicate) -> String {
             } else {
                 let params: Vec<String> = generic_params
                     .iter()
-                    .map(|p| format_generic_param(p))
+                    .map(format_generic_param)
                     .collect();
                 format!("for<{}> {}: {}", params.join(", "), type_str, bounds_str)
             }
@@ -299,7 +296,7 @@ fn format_type_simple(type_: &rustdoc_types::Type) -> String {
                     "({})",
                     types
                         .iter()
-                        .map(|t| format_type_simple(t))
+                        .map(format_type_simple)
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -311,7 +308,7 @@ fn format_type_simple(type_: &rustdoc_types::Type) -> String {
         }
         rustdoc_types::Type::Pat { type_, .. } => format_type_simple(type_),
         rustdoc_types::Type::ImplTrait(bounds) => {
-            let bound_strs: Vec<String> = bounds.iter().map(|b| format_generic_bound(b)).collect();
+            let bound_strs: Vec<String> = bounds.iter().map(format_generic_bound).collect();
             format!("impl {}", bound_strs.join(" + "))
         }
         rustdoc_types::Type::DynTrait(dt) => {
@@ -324,7 +321,7 @@ fn format_type_simple(type_: &rustdoc_types::Type) -> String {
                         let params: Vec<String> = poly_trait
                             .generic_params
                             .iter()
-                            .map(|p| format_generic_param(p))
+                            .map(format_generic_param)
                             .collect();
                         s = format!("for<{}> {}", params.join(", "), s);
                     }
@@ -395,7 +392,7 @@ fn format_generic_args_simple(args: &std::boxed::Box<rustdoc_types::GenericArgs>
             format!("<{}>", parts.join(", "))
         }
         rustdoc_types::GenericArgs::Parenthesized { inputs, output } => {
-            let input_strs: Vec<String> = inputs.iter().map(|t| format_type_simple(t)).collect();
+            let input_strs: Vec<String> = inputs.iter().map(format_type_simple).collect();
             match output {
                 None => format!("({})", input_strs.join(", ")),
                 Some(out) => format!("({}) -> {}", input_strs.join(", "), format_type_simple(out)),

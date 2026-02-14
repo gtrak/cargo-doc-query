@@ -169,7 +169,7 @@ impl TypeExpander {
                 let krate = self.crates.get(&key).unwrap();
                 PathResolver::find_by_path(krate, path)
                     .into_iter()
-                    .map(|(id, item)| (key.clone(), id.clone(), item.clone()))
+                    .map(|(id, item)| (key.clone(), id, item.clone()))
                     .collect()
             };
 
@@ -311,7 +311,7 @@ impl TypeExpander {
         };
 
         // Extract crate name from path for filtering
-        let crate_name = self.extract_crate_name(&crate_name, &type_path);
+        let crate_name = self.extract_crate_name(crate_name, &type_path);
         // Get visibility from item
         let visibility = visibility_to_string(&item.visibility);
 
@@ -678,7 +678,7 @@ fn format_function_signature(_item: &Item, func: &rustdoc_types::Function) -> St
             rustdoc_types::Type::ResolvedPath(path) => path.path.clone(),
             rustdoc_types::Type::Primitive(p) => p.clone(),
             rustdoc_types::Type::Tuple(types) => {
-                let inner: Vec<String> = types.iter().map(|t| format_type_signature(t)).collect();
+                let inner: Vec<String> = types.iter().map(format_type_signature).collect();
                 format!("({})", inner.join(", "))
             }
             _ => format!("{:?}", ret),
@@ -699,7 +699,7 @@ fn format_type_signature(ty: &rustdoc_types::Type) -> String {
             format!("[{}; {}]", format_type_signature(type_), len)
         }
         rustdoc_types::Type::Tuple(types) => {
-            let parts: Vec<String> = types.iter().map(|t| format_type_signature(t)).collect();
+            let parts: Vec<String> = types.iter().map(format_type_signature).collect();
             format!("({})", parts.join(", "))
         }
         rustdoc_types::Type::RawPointer { type_, is_mutable } => {
@@ -718,9 +718,9 @@ pub fn expand_type(
     detail_level: DetailLevel,
 ) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
-        .map_err(|e| ExpandError::Other(e.into()))?
+        .map_err(ExpandError::Other)?
         .load_current()
-        .map_err(|e| ExpandError::Other(e.into()))?
+        .map_err(ExpandError::Other)?
         .ok_or(ExpandError::NoCache)?;
 
     let mut expander = TypeExpander::new(index, depth);
@@ -736,9 +736,9 @@ pub fn expand_type_with_config(
     detail_level: DetailLevel,
 ) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
-        .map_err(|e| ExpandError::Other(e.into()))?
+        .map_err(ExpandError::Other)?
         .load_current()
-        .map_err(|e| ExpandError::Other(e.into()))?
+        .map_err(ExpandError::Other)?
         .ok_or(ExpandError::NoCache)?;
 
     let mut expander = TypeExpander::with_config(index, depth, config, detail_level);
