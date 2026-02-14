@@ -220,8 +220,9 @@ v1.1 builds on the v1.0 foundation to deliver output refinement features that ma
 - [x] **09-03**: Create BudgetTracker and integrate with text.rs (REND-04, DOCS-07)
 - [x] **09-04**: Wire DocHandler into ItemFormatter for budget-aware truncation (gap closure)
 - [x] **09-05**: Wire unified formatter into CLI expand command (gap closure)
+- [ ] **09-06**: Add docs field to TypeNode, wire to formatter (gap closure)
 
-**Plans:** 5 plans in 1 wave | **Status:** Gap closure in progress
+**Plans:** 6 plans in 1 wave | **Status:** Gap closure in progress
 
 ---
 
