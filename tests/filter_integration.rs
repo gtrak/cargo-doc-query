@@ -2,16 +2,9 @@
 //!
 //! Tests filter + depth, filter + token budget, filter + minimal mode combinations.
 
+mod utils;
 use std::process::Command;
-
-/// Helper to run cargo doc-query command
-fn run_doc_query(args: &[&str]) -> std::process::Output {
-    Command::new("cargo")
-        .args(["run", "--", "query"])
-        .args(args)
-        .output()
-        .expect("Failed to execute cargo doc-query")
-}
+use utils::run_doc_query;
 
 /// Helper to check if command succeeded
 fn assert_success(output: &std::process::Output, msg: &str) {

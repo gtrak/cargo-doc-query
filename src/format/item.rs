@@ -10,6 +10,17 @@ use crate::types::detail::{
     extract_deprecation_info, extract_semantic_attrs, visibility_to_string, DetailLevel,
 };
 
+/// Helper function to create empty NestedItemInfo entries
+fn create_empty_nested_items(count: usize) -> Vec<NestedItemInfo> {
+    (0..count)
+        .map(|_| NestedItemInfo {
+            name: String::new(),
+            kind: String::new(),
+            path: String::new(),
+        })
+        .collect()
+}
+
 /// Unified output structure for formatted items
 #[derive(Debug, Clone)]
 pub struct FormattedItem {
@@ -232,15 +243,7 @@ impl ItemFormatter {
         match &item.inner {
             // Module
             ItemEnum::Module(m) => {
-                let items: Vec<NestedItemInfo> = m
-                    .items
-                    .iter()
-                    .map(|id| NestedItemInfo {
-                        name: "".to_string(),
-                        kind: "".to_string(),
-                        path: "".to_string(),
-                    })
-                    .collect();
+                let items = create_empty_nested_items(m.items.len());
                 (None, vec![], vec![], items, None, None)
             }
             // Struct
@@ -269,15 +272,7 @@ impl ItemFormatter {
             }
             // Trait
             ItemEnum::Trait(t) => {
-                let items: Vec<NestedItemInfo> = t
-                    .items
-                    .iter()
-                    .map(|id| NestedItemInfo {
-                        name: "".to_string(),
-                        kind: "".to_string(),
-                        path: "".to_string(),
-                    })
-                    .collect();
+                let items = create_empty_nested_items(t.items.len());
                 let generics = if self.detail_level.includes_generics() {
                     format_generics(&t.generics)
                 } else {
@@ -287,15 +282,7 @@ impl ItemFormatter {
             }
             // Impl
             ItemEnum::Impl(i) => {
-                let items: Vec<NestedItemInfo> = i
-                    .items
-                    .iter()
-                    .map(|id| NestedItemInfo {
-                        name: "".to_string(),
-                        kind: "".to_string(),
-                        path: "".to_string(),
-                    })
-                    .collect();
+                let items = create_empty_nested_items(i.items.len());
                 (None, vec![], vec![], items, None, None)
             }
             // TypeAlias
@@ -332,15 +319,6 @@ impl ItemFormatter {
             }
             // Default case
             _ => (None, vec![], vec![], vec![], None, None),
-        }
-    }
-
-    /// Check if formatting would exceed token budget
-    fn would_exceed_budget(&self, _additional_tokens: usize) -> bool {
-        if let Some(budget) = self.token_budget {
-            self.current_tokens + _additional_tokens > budget
-        } else {
-            false
         }
     }
 }

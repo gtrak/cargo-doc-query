@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result};
 use rustdoc_types::{Crate, Function, Id, Impl, Item, ItemEnum, Type};
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;

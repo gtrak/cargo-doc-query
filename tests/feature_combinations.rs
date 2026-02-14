@@ -3,16 +3,9 @@
 //! Tests all v1.1 features working together: filters + token budget + depth,
 //! filters + minimal mode, filters + detailed mode, JSON output validation.
 
+mod utils;
 use std::process::Command;
-
-/// Helper to run cargo doc-query command
-fn run_doc_query(args: &[&str]) -> std::process::Output {
-    Command::new("cargo")
-        .args(["run", "--", "query"])
-        .args(args)
-        .output()
-        .expect("Failed to execute cargo doc-query")
-}
+use utils::run_doc_query;
 
 /// Test filters + token budget + depth combined
 #[test]

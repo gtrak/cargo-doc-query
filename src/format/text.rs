@@ -6,6 +6,21 @@ use crate::types::detail::DetailLevel;
 use crate::types::query::{QueryContent, QueryMatch, QueryResponse};
 use console::style;
 
+/// Print a budget warning if the token budget is nearing its limit
+fn print_budget_warning(tracker: &BudgetTracker) {
+    if tracker.is_warning_needed() {
+        let remaining = tracker.remaining().unwrap_or(0);
+        println!(
+            "\n{}",
+            style(format!(
+                "⚠ Token budget nearing limit - remaining: {} tokens",
+                remaining
+            ))
+            .yellow()
+        );
+    }
+}
+
 /// Format a query response as human-readable text
 pub fn format_query_response(response: &QueryResponse, query_path: &str) {
     format_query_response_with_suggestions(response, query_path, None)
@@ -389,12 +404,7 @@ pub fn format_with_item_formatter(
     }
 
     // Display warning if budget threshold reached
-    if tracker.is_warning_needed() {
-        println!(
-            "\n{}",
-            style("⚠ Token budget nearing limit - remaining: {} tokens").yellow()
-        );
-    }
+    print_budget_warning(&tracker);
 
     results
 }
@@ -538,9 +548,7 @@ pub fn format_expand_result_with_formatter(
     }
 
     // Show budget warning if needed
-    if tracker.is_warning_needed() {
-        println!("\n{}", style("⚠ Token budget nearing limit").yellow());
-    }
+    print_budget_warning(&tracker);
 
     // Show truncation warning
     if result.budget_exceeded {

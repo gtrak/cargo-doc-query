@@ -2,16 +2,9 @@
 //!
 //! Tests error scenarios: invalid glob, empty results, conflicting flags, invalid visibility.
 
+mod utils;
 use std::process::Command;
-
-/// Helper to run cargo doc-query command
-fn run_doc_query(args: &[&str]) -> std::process::Output {
-    Command::new("cargo")
-        .args(["run", "--", "query"])
-        .args(args)
-        .output()
-        .expect("Failed to execute cargo doc-query")
-}
+use utils::run_doc_query;
 
 /// Test invalid glob pattern produces helpful error
 /// cargo doc-query query Vec --include "[invalid"
