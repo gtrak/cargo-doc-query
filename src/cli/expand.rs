@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::time::Instant;
 
-use crate::format::text::format_expand_result_with_formatter;
-use crate::types::detail::DetailLevel;
-use crate::types::expand::TokenConfig;
-use crate::types::filter::{FilterEngine, FilterError};
+use cargo_doc_query::format::text::format_expand_result_with_formatter;
+use cargo_doc_query::types::detail::DetailLevel;
+use cargo_doc_query::types::expand::TokenConfig;
+use cargo_doc_query::types::filter::{FilterEngine, FilterError};
 
 /// Check if a visibility string is valid
 fn is_valid_visibility(vis: &str) -> bool {
@@ -186,10 +186,10 @@ impl ExpandCommand {
     ///
     /// If --only is specified, it takes precedence over --include.
     /// Otherwise, --include is used as the include pattern.
-    fn filter_config(&self) -> crate::types::filter::FilterConfig {
+    fn filter_config(&self) -> cargo_doc_query::types::filter::FilterConfig {
         let include_pattern = self.only.as_deref();
 
-        let mut config = crate::types::filter::FilterConfig::default();
+        let mut config = cargo_doc_query::types::filter::FilterConfig::default();
         if let Some(pattern) = include_pattern {
             config = config.with_include(pattern.to_string());
         } else {
@@ -254,13 +254,14 @@ impl ExpandCommand {
             .join("Cargo.toml");
 
         // Generate expected cache key from manifest files
-        let cache_inputs = crate::cache::key::CacheKeyInputs::from_project(&manifest_path)
-            .context("Failed to create cache key inputs")?;
+        let cache_inputs =
+            cargo_doc_query::cache::key::CacheKeyInputs::from_project(&manifest_path)
+                .context("Failed to create cache key inputs")?;
         let expected_key = cache_inputs.generate_key();
 
         // Check if rebuild is needed
-        let cache_store =
-            crate::cache::store::CacheStore::new().context("Failed to initialize cache store")?;
+        let cache_store = cargo_doc_query::cache::store::CacheStore::new()
+            .context("Failed to initialize cache store")?;
 
         let index = if let Some(current_index) = cache_store.load_current()? {
             // Compare cache keys
@@ -312,7 +313,7 @@ impl ExpandCommand {
         let start = Instant::now();
 
         // Use expand_type_with_config for token budgeting
-        let mut expansion = crate::query::expand::expand_type_with_config(
+        let mut expansion = cargo_doc_query::query::expand::expand_type_with_config(
             &self.path,
             self.depth,
             self.crate_name.as_deref(),
@@ -361,7 +362,7 @@ impl ExpandCommand {
     }
 
     /// Apply filters to expansion results (mutates in place)
-    fn apply_filters(&self, expansion: &mut crate::types::expand::ExpansionResult) {
+    fn apply_filters(&self, expansion: &mut cargo_doc_query::types::expand::ExpansionResult) {
         // Get filter configuration from CLI args
         let config = self.filter_config();
 

@@ -1,12 +1,11 @@
-mod cache;
 mod cargo;
 mod cli;
-mod error;
-mod format;
 mod index;
-mod parser;
-mod query;
-mod types;
+
+use cargo_doc_query::cache;
+use cargo_doc_query::error;
+use cargo_doc_query::query;
+use cargo_doc_query::types;
 
 use clap::{Parser, Subcommand};
 use cli::build::BuildCommand;
@@ -15,7 +14,7 @@ use error::errors::AppError;
 use std::process::ExitCode;
 use types::detail::DetailLevel;
 
-use crate::cache::store::CacheStore;
+use cache::store::CacheStore;
 
 /// Global configuration shared across all commands
 pub struct GlobalConfig {
@@ -292,11 +291,10 @@ fn run(cli: Cli) -> Result<(), AppError> {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     // Downcast to check for specific error types
-                    if let Some(expand_err) = e.downcast_ref::<crate::query::expand::ExpandError>()
-                    {
+                    if let Some(expand_err) = e.downcast_ref::<query::expand::ExpandError>() {
                         match expand_err {
-                            crate::query::expand::ExpandError::NoCache => Err(AppError::NoCache),
-                            crate::query::expand::ExpandError::NotFound(p) => {
+                            query::expand::ExpandError::NoCache => Err(AppError::NoCache),
+                            query::expand::ExpandError::NotFound(p) => {
                                 // Show suggestions for similar types
                                 if !quiet && !json {
                                     if let Ok(suggestions) = suggest_similar_types(path) {
@@ -310,7 +308,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
                                 }
                                 Err(AppError::NotFound(p.clone()))
                             }
-                            crate::query::expand::ExpandError::Other(_) => Err(AppError::Other(e)),
+                            query::expand::ExpandError::Other(_) => Err(AppError::Other(e)),
                         }
                     } else {
                         Err(AppError::Other(e))
@@ -323,12 +321,10 @@ fn run(cli: Cli) -> Result<(), AppError> {
 
 /// Find similar type names to suggest when a query fails
 fn suggest_similar_types(path: &str) -> anyhow::Result<Vec<String>> {
-    use crate::cache::store::CacheStore;
-
-    let cache_store = CacheStore::new()?;
+    let cache_store = cache::store::CacheStore::new()?;
 
     if let Some(index) = cache_store.load_current()? {
-        let suggestions = crate::query::suggest::find_similar_types(&index, path, 5);
+        let suggestions = query::suggest::find_similar_types(&index, path, 5);
         Ok(suggestions)
     } else {
         Ok(vec![])

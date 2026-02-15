@@ -5,10 +5,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::cache::key::CacheKeyInputs;
-use crate::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
 use crate::index::graph::{CrateGraph, CrateNode};
-use crate::parser::validate::validate_format_version;
+use cargo_doc_query::cache::key::CacheKeyInputs;
+use cargo_doc_query::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
+use cargo_doc_query::parser::validate::validate_format_version;
 
 pub struct BuildCommand {
     manifest_path: PathBuf,
