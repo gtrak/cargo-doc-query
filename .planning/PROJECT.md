@@ -1,20 +1,33 @@
 # cargo-doc-query
 
-## Current Milestone: v1.1 Output Refinement
+## Current Milestone: v2.0 Infrastructure (Planned)
 
-**Goal:** Unify item rendering across all depths and provide robust filtering with documentation support
+**Goal:** Shared cache, stdlib queries, garbage collection
 
 **Target features:**
-- Consistent kind rendering (modules/functions/types/structs/enums) at any tree depth
-- Robust `--include`/`--exclude` filtering flags
-- Doc comment extraction and display
-- Discovery and implementation of additional rustdoc JSON fields
+- Shared cache directory across projects in `~/.cargo/doc-query/`
+- Stdlib queries (Vec, String, Iterator) with rust build system integration
+- Garbage collection command to clean stale cache files
+- Cache deduplication for identical dependencies across projects
 
-## Previous Milestone
+## Previous Milestones
 
-**Shipped:** v1.0 MVP (2026-02-13)
+### v1.1 Output Refinement (Shipped: 2026-02-14)
 
-A production-ready Cargo subcommand for fast, structured API queries over Rust dependencies. Currently used for LLM agent contexts and CLI exploration.
+Unified rendering, robust filtering, doc comment extraction, and rich metadata for LLM-optimized API queries.
+
+- FilterEngine with glob patterns, validation, and statistics
+- CLI integration with --include, --exclude, --kind, --crate, --visibility flags
+- Result type extensions: visibility, deprecation, generics, attributes
+- Unified rendering: single dispatcher for all ItemKind variants
+- Doc comment extraction with smart truncation
+- Token budget enforcement at rendering layer
+- Integration tests (43+) and snapshot tests (12)
+- Comprehensive README with all v1.1 features documented
+
+### v1.0 MVP (Shipped: 2026-02-13)
+
+A production-ready Cargo subcommand for fast, structured API queries over Rust dependencies.
 
 ## What This Is
 
@@ -40,18 +53,19 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 - ✓ Token-budget constrained output modes — v1.0
 - ✓ Minimal and verbose output formats — v1.0
 
-### Active (v1.1) — Output Refinement
+### Validated (v1.1)
 
-- [ ] Unified kind rendering (modules/functions/types/structs/enums) at any depth
-- [ ] Robust `--include`/`--exclude` filtering flags
-- [ ] Doc comment extraction and display
-- [ ] Discovery and implementation of additional rustdoc JSON fields
+- ✓ Unified kind rendering (modules/functions/types/structs/enums) at any depth — v1.1
+- ✓ Robust `--include`/`--exclude` filtering flags — v1.1
+- ✓ Doc comment extraction and display — v1.1
+- ✓ Discovery and implementation of additional rustdoc JSON fields — v1.1
 
-### Deferred to v2.0
+### Active (v2.0) — Infrastructure
 
-- Stdlib queries (Vec, String, Iterator) — deferred for infrastructure focus
-- Shared cache directory across projects — deferred for infrastructure focus  
-- Garbage collection command — deferred for infrastructure focus
+- [ ] Shared cache directory across projects
+- [ ] Stdlib queries (Vec, String, Iterator)
+- [ ] Garbage collection command
+- [ ] Cache deduplication
 
 ### Out of Scope
 
@@ -67,13 +81,6 @@ Sub-100ms deterministic structured API extraction that reduces LLM context usage
 1. **Shared Cache** — Deduplicate dependency JSON across projects in `~/.cargo/doc-query/`
 2. **Stdlib Support** — Query standard library types (requires rust build system integration)
 3. **Garbage Collection** — Clean up stale cache files with `cargo doc-query gc`
-
-## v1.1 Goals (In Progress)
-
-1. **Unified Rendering** — Consistent display of item kinds regardless of tree depth
-2. **Robust Filtering** — Comprehensive `--include`/`--exclude` flag support
-3. **Documentation** — Extract and display doc comments with token-aware truncation
-4. **Field Discovery** — Audit rustdoc JSON schema for missing display fields
 
 ## Context
 
@@ -124,6 +131,10 @@ LSP (rust-analyzer) limitations:
 | Nightly Rust required | Only way to get JSON output from rustdoc | ✓ Accepted — documented requirement |
 | Typed errors (ExpandError) | Replace fragile string matching | ✓ Good — cleaner error handling |
 | Unified query/expand command | Simplify CLI, single code path | ✓ Good — removed duplication |
+| FilterEngine with glob | Simple pattern matching, pre-compiled | ✓ Good — performant filtering |
+| DetailLevel enum | Control metadata at render time | ✓ Good — clean separation |
+| ItemFormatter dispatcher | Unified rendering pipeline | ✓ Good — REND-01 achieved |
 
 ---
-*Last updated: 2026-02-13 — Milestone v1.1 started (output refinement focus)*
+
+*Last updated: 2026-02-14 — Milestone v1.1 complete, v2.0 ready to plan*
