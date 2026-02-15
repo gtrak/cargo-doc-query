@@ -1,5 +1,5 @@
 use cargo_doc_query::types::filter::{FilterConfig, FilterEngine};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn create_test_config_simple() -> FilterConfig {
     FilterConfig::default()
@@ -10,10 +10,10 @@ fn create_test_config_simple() -> FilterConfig {
 fn create_test_config_complex() -> FilterConfig {
     let mut config = FilterConfig::default();
     for i in 0..50 {
-        config = config.with_include(&format!("crate::module{}::*", i));
+        config = config.with_include(format!("crate::module{}::*", i));
     }
     for i in 0..50 {
-        config = config.with_exclude(&format!("*::Test{}", i));
+        config = config.with_exclude(format!("*::Test{}", i));
     }
     config = config
         .with_kind("struct")

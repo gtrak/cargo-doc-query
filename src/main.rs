@@ -11,10 +11,11 @@ mod types;
 use clap::{Parser, Subcommand};
 use cli::build::BuildCommand;
 use cli::expand::ExpandCommand;
-use cli::Command;
 use error::errors::AppError;
 use std::process::ExitCode;
 use types::detail::DetailLevel;
+
+use crate::cache::store::CacheStore;
 
 /// Global configuration shared across all commands
 pub struct GlobalConfig {
@@ -207,6 +208,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), AppError> {
     let quiet = cli.quiet;
     let _no_color = cli.no_color;
+    let cache_store = CacheStore::new()?;
 
     match &cli.command {
         Commands::Build => {
@@ -225,7 +227,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
 
             let mut cmd = BuildCommand::new(manifest_path, cli.all_features);
             cmd.set_quiet(quiet);
-            cmd.execute()
+            cmd.execute(&cache_store)
                 .map_err(|e| AppError::BuildFailed(e.to_string()))
         }
         Commands::Query {

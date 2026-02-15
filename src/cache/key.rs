@@ -6,12 +6,12 @@ use std::path::Path;
 /// Inputs that affect the documentation index output
 #[derive(Debug, Clone)]
 pub struct CacheKeyInputs {
-    cargo_toml_content: Vec<u8>,      // Hash of Cargo.toml
-    cargo_lock_content: Vec<u8>,      // Hash of Cargo.lock
-    rustc_version: String,            // rustc --version output
-    target_triple: String,            // Target platform triple
-    features: BTreeMap<String, bool>, // Enabled features (sorted)
-    rustdoc_types_version: String,    // rustdoc-types crate version
+    pub cargo_toml_content: Vec<u8>,      // Hash of Cargo.toml
+    pub cargo_lock_content: Vec<u8>,      // Hash of Cargo.lock
+    pub rustc_version: String,            // rustc --version output
+    pub target_triple: String,            // Target platform triple
+    pub features: BTreeMap<String, bool>, // Enabled features (sorted)
+    pub rustdoc_types_version: String,    // rustdoc-types crate version
 }
 
 impl CacheKeyInputs {
@@ -48,26 +48,6 @@ impl CacheKeyInputs {
             features,
             rustdoc_types_version: env!("CARGO_PKG_VERSION").to_string(),
         })
-    }
-
-    /// Get cargo.toml content
-    pub fn cargo_toml_content(&self) -> &[u8] {
-        &self.cargo_toml_content
-    }
-
-    /// Get rustc version
-    pub fn rustc_version(&self) -> &str {
-        &self.rustc_version
-    }
-
-    /// Get target triple
-    pub fn target_triple(&self) -> &str {
-        &self.target_triple
-    }
-
-    /// Get rustdoc_types version
-    pub fn rustdoc_types_version(&self) -> &str {
-        &self.rustdoc_types_version
     }
 
     /// Generate deterministic cache key using BLAKE3
@@ -152,7 +132,6 @@ mod tests {
         let manifest_path = Path::new("Cargo.toml");
         let mut inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
 
-        let features1: BTreeMap<String, bool> = inputs.features.clone();
         inputs.features.insert("test-feature".to_string(), true);
         let key1 = inputs.generate_key();
 

@@ -39,7 +39,9 @@ pub fn format_query_response_with_suggestions(
         );
 
         // Show suggestions if provided
-        if let Some(sugs) = suggestions && !sugs.is_empty() {
+        if let Some(sugs) = suggestions
+            && !sugs.is_empty()
+        {
             println!("\nDid you mean:");
             for suggestion in sugs {
                 println!("  • {}", style(suggestion).yellow());
@@ -67,9 +69,9 @@ fn format_query_match(match_: &QueryMatch) {
     println!("{}", style("─".repeat(60)).dim());
 
     match &match_.content {
-        QueryContent::Type(type_result) => format_type_result(type_result),
-        QueryContent::Trait(trait_result) => format_trait_result(trait_result),
-        QueryContent::Module(module_result) => format_module_result(module_result),
+        QueryContent::Type(type_result) => format_type_result(&type_result),
+        QueryContent::Trait(trait_result) => format_trait_result(&trait_result),
+        QueryContent::Module(module_result) => format_module_result(&module_result),
     }
 }
 
@@ -150,7 +152,9 @@ fn format_module_result(module_result: &crate::types::query::ModuleResult) {
     ];
 
     for kind in &kind_order {
-        if let Some(items) = items_by_kind.get(*kind) && !items.is_empty() {
+        if let Some(items) = items_by_kind.get(*kind)
+            && !items.is_empty()
+        {
             println!(
                 "\n  {} ({}):",
                 style(format!("{:?}", kind)).bold(),
@@ -562,8 +566,7 @@ mod tests {
         ExpansionResult, FieldInfo, ModuleItemInfo, TypeGraph, TypeNode, VariantInfo,
     };
     use crate::types::query::{
-        MethodOutput, ModuleResult, QueryContent, QueryMatch, QueryResponse, TraitImplOutput,
-        TraitResult, TypeResult,
+        MethodOutput, QueryContent, TraitImplOutput, TraitResult, TypeResult,
     };
 
     #[test]

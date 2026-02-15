@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::time::Instant;
 
-use crate::cli::Command;
 use crate::format::text::format_expand_result_with_formatter;
 use crate::types::detail::DetailLevel;
 use crate::types::expand::TokenConfig;
@@ -78,61 +77,6 @@ pub struct ExpandCommand {
 }
 
 impl ExpandCommand {
-    #[deprecated(note = "Use from_args() instead - supports filter flags")]
-    pub fn new(path: String, depth: u32, crate_name: Option<String>) -> Self {
-        Self {
-            path,
-            depth,
-            crate_name,
-            tokens: None,
-            minimal: false,
-            detailed: false,
-            json: false,
-            quiet: false,
-            include: Vec::new(),
-            exclude: Vec::new(),
-            kind: Vec::new(),
-            crate_filter: Vec::new(),
-            visibility: Vec::new(),
-            only: None,
-            help_filters: false,
-        }
-    }
-
-    /// Create from parsed arguments
-    pub fn from_args(
-        path: String,
-        depth: u32,
-        crate_name: Option<String>,
-        tokens: Option<usize>,
-        minimal: bool,
-        include: Vec<String>,
-        exclude: Vec<String>,
-        kind: Vec<String>,
-        crate_filter: Vec<String>,
-        visibility: Vec<String>,
-        only: Option<String>,
-        help_filters: bool,
-    ) -> Self {
-        Self {
-            path,
-            depth,
-            crate_name,
-            tokens,
-            minimal,
-            detailed: false,
-            json: false,
-            quiet: false,
-            include,
-            exclude,
-            kind,
-            crate_filter,
-            visibility,
-            only,
-            help_filters,
-        }
-    }
-
     /// Create from parsed arguments with DetailLevel support
     #[allow(clippy::too_many_arguments)]
     pub fn from_args_with_detail(
@@ -167,11 +111,6 @@ impl ExpandCommand {
             only,
             help_filters,
         }
-    }
-
-    /// Set quiet mode
-    pub fn set_quiet(&mut self, quiet: bool) {
-        self.quiet = quiet;
     }
 
     /// Validate filter arguments and return any errors
@@ -333,7 +272,7 @@ impl ExpandCommand {
                     manifest_path.with_file_name("Cargo.toml"),
                     false,
                 );
-                build_cmd.execute().context("Rebuild failed")?;
+                build_cmd.execute(&cache_store).context("Rebuild failed")?;
                 cache_store
                     .load(&expected_key)
                     .context("Failed to load rebuilt index")?
@@ -350,7 +289,7 @@ impl ExpandCommand {
                 manifest_path.with_file_name("Cargo.toml"),
                 false,
             );
-            build_cmd.execute().context("Build failed")?;
+            build_cmd.execute(&cache_store).context("Build failed")?;
             cache_store
                 .load(&expected_key)
                 .context("Failed to load built index")?
@@ -448,7 +387,9 @@ impl ExpandCommand {
             Err(FilterError::EmptyPattern) => {
                 eprintln!("Error: Empty filter pattern");
                 eprintln!();
-                eprintln!("Filter patterns cannot be empty. Check your --include, --exclude, or --only flags.");
+                eprintln!(
+                    "Filter patterns cannot be empty. Check your --include, --exclude, or --only flags."
+                );
                 eprintln!();
                 eprintln!("Example: --include \"std::*\"");
                 eprintln!();
@@ -466,58 +407,19 @@ impl ExpandCommand {
                 eprintln!("Review your --include and --exclude flags to resolve the conflict.");
                 return;
             }
-            Err(e) => {
-                eprintln!("Error: Failed to compile filters: {}", e);
-                eprintln!();
-                eprintln!("For filter syntax help, run:");
-                eprintln!("  cargo doc-query query --help-filters");
-                return;
-            }
         };
 
         // Filter the type graph nodes
         let (filtered_nodes, stats) = engine.filter_with_stats(&expansion.graph.nodes);
 
         // Update expansion with filtered nodes
-        expansion.graph.nodes = filtered_nodes
-            .into_iter().cloned()
-            .collect();
+        expansion.graph.nodes = filtered_nodes.into_iter().cloned().collect();
 
         // Display stats if not in quiet mode
         if !self.quiet {
             println!();
             println!("{}", stats.summary());
         }
-    }
-
-    /// Execute with explicit DetailLevel (stores it for use during expansion)
-    ///
-    /// This method accepts a DetailLevel parameter and ensures the expansion
-    /// uses the appropriate level of detail for metadata extraction.
-    pub fn execute_with_detail(&self, detail_level: DetailLevel) -> Result<()> {
-        // Store detail level in the expansion context
-        // For now, we set the detailed field based on whether detail_level is not minimal
-        // The actual detail_level will be passed through to the expand engine
-        let cmd = Self {
-            path: self.path.clone(),
-            depth: self.depth,
-            crate_name: self.crate_name.clone(),
-            tokens: self.tokens,
-            minimal: detail_level.is_minimal(),
-            detailed: detail_level.is_detailed(),
-            json: self.json,
-            quiet: self.quiet,
-            include: self.include.clone(),
-            exclude: self.exclude.clone(),
-            kind: self.kind.clone(),
-            crate_filter: self.crate_filter.clone(),
-            visibility: self.visibility.clone(),
-            only: self.only.clone(),
-            help_filters: self.help_filters,
-        };
-
-        // Execute with the configured detail level
-        cmd.execute()
     }
 
     /// Display glob pattern syntax help

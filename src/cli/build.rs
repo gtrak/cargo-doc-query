@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use crate::cache::key::CacheKeyInputs;
 use crate::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
-use crate::cli::Command;
 use crate::index::graph::{CrateGraph, CrateNode};
 use crate::parser::validate::validate_format_version;
 
@@ -67,27 +66,6 @@ impl BuildCommand {
         pb.set_message(msg.to_string());
         pb.enable_steady_tick(Duration::from_millis(100));
         pb
-    }
-
-    /// Extract format version from JSON content without full parsing
-    fn extract_format_version(json_content: &str) -> Result<u32> {
-        // Quick extraction: find "format_version":N pattern
-        if let Some(pos) = json_content.find("\"format_version\"") {
-            let after_key = &json_content[pos + 16..]; // Skip "format_version"
-            if let Some(colon_pos) = after_key.find(':') {
-                let after_colon = &after_key[colon_pos + 1..];
-                // Extract number (handle whitespace)
-                let number_str: String = after_colon
-                    .chars()
-                    .skip_while(|c| c.is_whitespace())
-                    .take_while(|c| c.is_ascii_digit())
-                    .collect();
-                if let Ok(version) = number_str.parse::<u32>() {
-                    return Ok(version);
-                }
-            }
-        }
-        Err(anyhow::anyhow!("format_version not found in JSON"))
     }
 
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
@@ -232,11 +210,93 @@ impl BuildCommand {
     }
 }
 
+impl BuildCommand {
+    pub fn execute(&self, cache_store: &CacheStore) -> Result<()> {
+        eprintln!("{}", style("Building documentation index...").bold().cyan());
+
+        // 1. Get workspace dependencies (BUILD-02 fix)
+        let deps_spinner = self.create_spinner("Discovering dependencies...");
+        let deps = crate::cargo::dependencies::get_workspace_dependencies(&self.manifest_path)
+            .context("Failed to get workspace dependencies")?;
+        deps_spinner.finish_with_message(format!("Found {} external dependencies", deps.len()));
+
+        // Check if there are any dependencies
+        if deps.is_empty() {
+            return Err(anyhow::anyhow!(
+                "This project has no external dependencies. cargo-doc-query requires dependencies to index.\n\
+                Add dependencies to your Cargo.toml and run `cargo doc-query build` again."
+            ));
+        }
+
+        // 2. Generate cache key from project inputs (CACHE-01)
+        let key_spinner = self.create_spinner("Computing cache key...");
+        let cache_inputs = CacheKeyInputs::from_project(&self.manifest_path)
+            .context("Failed to create cache key")?;
+        let cache_key = cache_inputs.generate_key();
+        key_spinner.finish_with_message(format!("Cache key: {}...", &cache_key[..16]));
+
+        if let Some(index) = cache_store.load(&cache_key)? {
+            eprintln!(
+                "{}",
+                style(format!(
+                    "✓ Using cached index ({} crates)",
+                    index.nodes.len()
+                ))
+                .green()
+            );
+            return Ok(());
+        }
+
+        eprintln!("{}", style("Cache miss, building index...").yellow());
+
+        // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
+        let json_paths = self.generate_rustdoc_json(&deps)?;
+
+        // 5. Parse and validate all JSON files
+        let mut graph = CrateGraph::new();
+        let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
+
+        let json_paths_refs: Vec<_> = json_paths.iter().collect();
+        for (pkg_name, pkg_version, json_path) in &json_paths_refs {
+            process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
+
+            let json_str = std::fs::read_to_string(json_path)
+                .with_context(|| format!("Failed to read {}", json_path.display()))?;
+
+            // Format version validation - warn but don't fail
+            // Note: We skip strict validation here because large JSON files can exceed
+            // serde_json's recursion limit during validation. The actual parsing with
+            // rustdoc_types will catch format mismatches later.
+            if let Err(_e) = validate_format_version(&json_str) {
+                // Silently continue - validation failed but we'll try to parse anyway
+            }
+
+            // Add crate to graph
+            let node = CrateNode {
+                name: pkg_name.clone(),
+                version: pkg_version.clone(),
+                json_path: json_path.clone(),
+            };
+            graph.add_crate(node);
+            process_pb.inc(1);
+        }
+        process_pb.finish_with_message(format!("Indexed {} crates", graph.crate_count()));
+
+        // 8. Save to cache (CACHE-03)
+        let save_spinner = self.create_spinner("Saving cache...");
+        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
+        serializable.cache_key = cache_key.clone();
+        cache_store.save(&cache_key, &serializable)?;
+        save_spinner.finish_with_message("Cache saved");
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::Path;
-    use tempfile::{tempdir, TempDir};
 
     #[test]
     fn test_build_command_creation() {
@@ -307,67 +367,6 @@ mod tests {
     }
 
     #[test]
-    fn test_format_version_extraction_valid_json() {
-        let json_content = r#"{
-            "format_version": 57,
-            "crate": "std",
-            "items": {}
-        }"#;
-
-        let result = BuildCommand::extract_format_version(json_content).unwrap();
-        assert_eq!(result, 57);
-    }
-
-    #[test]
-    fn test_format_version_extraction_missing() {
-        let json_content = r#"{
-            "crate": "std",
-            "items": {}
-        }"#;
-
-        let result = BuildCommand::extract_format_version(json_content);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_format_version_extraction_invalid_number() {
-        let json_content = r#"{
-            "format_version": "invalid",
-            "crate": "std"
-        }"#;
-
-        let result = BuildCommand::extract_format_version(json_content);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_format_version_extraction_with_whitespace() {
-        let json_content = r#"{
-            "format_version" : 57 ,
-            "crate": "std"
-        }"#;
-
-        let result = BuildCommand::extract_format_version(json_content).unwrap();
-        assert_eq!(result, 57);
-    }
-
-    #[test]
-    fn test_format_version_extraction_different_versions() {
-        let versions = vec![
-            (1, "\"format_version\": 1"),
-            (10, "\"format_version\": 10"),
-            (57, "\"format_version\": 57"),
-            (100, "\"format_version\": 100"),
-        ];
-
-        for (expected, json_part) in versions {
-            let json_content = format!(r#"{{{}, "crate": "std" }}"#, json_part);
-            let result = BuildCommand::extract_format_version(&json_content).unwrap();
-            assert_eq!(result, expected);
-        }
-    }
-
-    #[test]
     fn test_package_name_to_json_name_conversion() {
         let tests = vec![
             ("serde", "serde"),
@@ -407,10 +406,10 @@ mod tests {
         let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
 
         // When file doesn't exist, returns empty content (this is expected behavior)
-        assert!(inputs.cargo_toml_content().is_empty());
-        assert!(!inputs.rustc_version().is_empty());
-        assert!(!inputs.target_triple().is_empty());
-        assert!(!inputs.rustdoc_types_version().is_empty());
+        assert!(inputs.cargo_toml_content.is_empty());
+        assert!(!inputs.rustc_version.is_empty());
+        assert!(!inputs.target_triple.is_empty());
+        assert!(!inputs.rustdoc_types_version.is_empty());
     }
 
     #[test]
@@ -489,91 +488,5 @@ mod tests {
             let normalized = package_name.replace("-", "_");
             assert_eq!(normalized, expected);
         }
-    }
-}
-
-impl Command for BuildCommand {
-    fn execute(&self) -> Result<()> {
-        eprintln!("{}", style("Building documentation index...").bold().cyan());
-
-        // 1. Get workspace dependencies (BUILD-02 fix)
-        let deps_spinner = self.create_spinner("Discovering dependencies...");
-        let deps = crate::cargo::dependencies::get_workspace_dependencies(&self.manifest_path)
-            .context("Failed to get workspace dependencies")?;
-        deps_spinner.finish_with_message(format!("Found {} external dependencies", deps.len()));
-
-        // Check if there are any dependencies
-        if deps.is_empty() {
-            return Err(anyhow::anyhow!(
-                "This project has no external dependencies. cargo-doc-query requires dependencies to index.\n\
-                Add dependencies to your Cargo.toml and run `cargo doc-query build` again."
-            ));
-        }
-
-        // 2. Generate cache key from project inputs (CACHE-01)
-        let key_spinner = self.create_spinner("Computing cache key...");
-        let cache_inputs = CacheKeyInputs::from_project(&self.manifest_path)
-            .context("Failed to create cache key")?;
-        let cache_key = cache_inputs.generate_key();
-        key_spinner.finish_with_message(format!("Cache key: {}...", &cache_key[..16]));
-
-        // 3. Try to load from cache (CACHE-02)
-        let cache_store = CacheStore::new().context("Failed to initialize cache store")?;
-
-        if let Some(index) = cache_store.load(&cache_key)? {
-            eprintln!(
-                "{}",
-                style(format!(
-                    "✓ Using cached index ({} crates)",
-                    index.nodes.len()
-                ))
-                .green()
-            );
-            return Ok(());
-        }
-
-        eprintln!("{}", style("Cache miss, building index...").yellow());
-
-        // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
-        let json_paths = self.generate_rustdoc_json(&deps)?;
-
-        // 5. Parse and validate all JSON files
-        let mut graph = CrateGraph::new();
-        let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
-
-        let json_paths_refs: Vec<_> = json_paths.iter().collect();
-        for (pkg_name, pkg_version, json_path) in &json_paths_refs {
-            process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
-
-            let json_str = std::fs::read_to_string(json_path)
-                .with_context(|| format!("Failed to read {}", json_path.display()))?;
-
-            // Format version validation - warn but don't fail
-            // Note: We skip strict validation here because large JSON files can exceed
-            // serde_json's recursion limit during validation. The actual parsing with
-            // rustdoc_types will catch format mismatches later.
-            if let Err(_e) = validate_format_version(&json_str) {
-                // Silently continue - validation failed but we'll try to parse anyway
-            }
-
-            // Add crate to graph
-            let node = CrateNode {
-                name: pkg_name.clone(),
-                version: pkg_version.clone(),
-                json_path: json_path.clone(),
-            };
-            graph.add_crate(node);
-            process_pb.inc(1);
-        }
-        process_pb.finish_with_message(format!("Indexed {} crates", graph.crate_count()));
-
-        // 8. Save to cache (CACHE-03)
-        let save_spinner = self.create_spinner("Saving cache...");
-        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
-        serializable.cache_key = cache_key.clone();
-        cache_store.save(&cache_key, &serializable)?;
-        save_spinner.finish_with_message("Cache saved");
-
-        Ok(())
     }
 }

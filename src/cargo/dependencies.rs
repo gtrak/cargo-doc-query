@@ -59,8 +59,6 @@ pub fn get_workspace_dependencies(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_manifest_path_canonicalization() {

@@ -29,20 +29,6 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_query_error_message() {
-        let error = AppError::InvalidQuery("invalid path".to_string());
-        assert!(error.to_string().contains("invalid path"));
-        assert_eq!(error.exit_code(), ExitCode::from(5));
-    }
-
-    #[test]
-    fn test_cache_error_message() {
-        let error = AppError::CacheError("cache storage error".to_string());
-        assert!(error.to_string().contains("cache storage error"));
-        assert_eq!(error.exit_code(), ExitCode::from(6));
-    }
-
-    #[test]
     fn test_io_error_conversion() {
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let app_error: AppError = io_error.into();
@@ -86,16 +72,9 @@ mod tests {
             AppError::BuildFailed("test".to_string()).exit_code(),
             ExitCode::from(4)
         );
+
         assert_eq!(
-            AppError::InvalidQuery("test".to_string()).exit_code(),
-            ExitCode::from(5)
-        );
-        assert_eq!(
-            AppError::CacheError("test".to_string()).exit_code(),
-            ExitCode::from(6)
-        );
-        assert_eq!(
-            AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, "test")).exit_code(),
+            AppError::Io(std::io::Error::other("test")).exit_code(),
             ExitCode::from(7)
         );
         assert_eq!(
@@ -119,8 +98,6 @@ mod tests {
             AppError::NoCache,
             AppError::NotFound("test::path".to_string()),
             AppError::BuildFailed("build failed".to_string()),
-            AppError::InvalidQuery("invalid query".to_string()),
-            AppError::CacheError("cache error".to_string()),
             AppError::Config("config error".to_string()),
         ];
 
@@ -142,12 +119,6 @@ pub enum AppError {
     #[error("Failed to build documentation index: {0}")]
     BuildFailed(String),
 
-    #[error("Invalid query: {0}")]
-    InvalidQuery(String),
-
-    #[error("Cache error: {0}")]
-    CacheError(String),
-
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -165,42 +136,13 @@ impl AppError {
     /// Get the appropriate exit code for this error
     pub fn exit_code(&self) -> ExitCode {
         match self {
-            AppError::NoCache => ExitCode::from(2),
-            AppError::NotFound(_) => ExitCode::from(3),
-            AppError::BuildFailed(_) => ExitCode::from(4),
-            AppError::InvalidQuery(_) => ExitCode::from(5),
-            AppError::CacheError(_) => ExitCode::from(6),
-            AppError::Io(_) => ExitCode::from(7),
-            AppError::Json(_) => ExitCode::from(8),
-            AppError::Config(_) => ExitCode::from(9),
+            AppError::NoCache => ExitCode::from(1),
+            AppError::NotFound(_) => ExitCode::from(1),
+            AppError::BuildFailed(_) => ExitCode::from(1),
+            AppError::Io(_) => ExitCode::from(1),
+            AppError::Json(_) => ExitCode::from(1),
+            AppError::Config(_) => ExitCode::from(1),
             AppError::Other(_) => ExitCode::from(1),
         }
     }
-}
-
-/// Result type alias using AppError
-pub type AppResult<T> = Result<T, AppError>;
-
-/// Exit codes for the application
-pub mod exit_codes {
-    /// Success
-    pub const SUCCESS: i32 = 0;
-    /// General error
-    pub const GENERAL_ERROR: i32 = 1;
-    /// No cache found
-    pub const NO_CACHE: i32 = 2;
-    /// Query returned no results
-    pub const NOT_FOUND: i32 = 3;
-    /// Build failed
-    pub const BUILD_FAILED: i32 = 4;
-    /// Invalid query
-    pub const INVALID_QUERY: i32 = 5;
-    /// Cache error
-    pub const CACHE_ERROR: i32 = 6;
-    /// IO error
-    pub const IO_ERROR: i32 = 7;
-    /// JSON parsing error
-    pub const JSON_ERROR: i32 = 8;
-    /// Configuration error
-    pub const CONFIG_ERROR: i32 = 9;
 }

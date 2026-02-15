@@ -1,6 +1,6 @@
 ---
 description: Executes GSD plans with atomic commits, deviation handling, checkpoint protocols, and state management. Spawned by execute-phase orchestrator or execute-plan command.
-model: "local/local"
+# model: "local/local"
 color: "#FFFF00"
 tools:
   read: true

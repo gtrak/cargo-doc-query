@@ -36,18 +36,12 @@ impl CacheStore {
         Ok(Self { cache_dir })
     }
 
-    pub fn new_with_dir(cache_dir: PathBuf) -> Result<Self> {
-        std::fs::create_dir_all(&cache_dir).context("Failed to create cache directory")?;
-
-        Ok(Self { cache_dir })
-    }
-
     #[cfg(test)]
     pub fn new_temp() -> Result<Self> {
         let temp_dir = TempDir::new().context("Failed to create temp directory")?;
 
         Ok(Self {
-            cache_dir: temp_dir.into_path(),
+            cache_dir: temp_dir.keep(),
         })
     }
 
@@ -56,7 +50,7 @@ impl CacheStore {
         let temp_dir = TempDir::new().context("Failed to create temp directory")?;
 
         Ok(Self {
-            cache_dir: temp_dir.into_path(),
+            cache_dir: temp_dir.keep(),
         })
     }
 
@@ -150,24 +144,11 @@ impl CacheStore {
             }
         }
     }
-
-    /// Clear stdlib JSON (for testing or forced rebuild)
-    pub fn clear_stdlib(&self) -> Result<()> {
-        let stdlib_dir = self.cache_dir.join("stdlib");
-
-        if stdlib_dir.exists() {
-            std::fs::remove_dir_all(&stdlib_dir).context("Failed to remove stdlib directory")?;
-            println!("Cleared stdlib JSON");
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     #[test]
     fn test_cache_store_new_creates_directory() {

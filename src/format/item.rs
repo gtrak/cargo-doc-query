@@ -7,7 +7,7 @@ use rustdoc_types::{Item, ItemEnum};
 
 use crate::format::doc::DocHandler;
 use crate::types::detail::{
-    extract_deprecation_info, extract_semantic_attrs, visibility_to_string, DetailLevel,
+    DetailLevel, extract_deprecation_info, extract_semantic_attrs, visibility_to_string,
 };
 
 /// Helper function to create empty NestedItemInfo entries
@@ -72,7 +72,9 @@ impl FormattedItem {
         }
 
         // Visibility
-        if let Some(ref vis) = self.visibility && vis != "private" {
+        if let Some(ref vis) = self.visibility
+            && vis != "private"
+        {
             output.push_str(&format!("  {}\n", vis));
         }
 
@@ -167,8 +169,7 @@ impl ItemFormatter {
         let raw_docs = DocHandler::extract_docs(item);
         let docs = raw_docs.and_then(|d| doc_handler.format_docs(&d));
         let (is_deprecated, deprecation_note) = if self.detail_level.includes_deprecation() {
-            extract_deprecation_info(item.deprecation.as_ref())
-                .unwrap_or((false, None))
+            extract_deprecation_info(item.deprecation.as_ref()).unwrap_or((false, None))
         } else {
             (false, None)
         };
@@ -316,28 +317,6 @@ impl ItemFormatter {
             _ => (None, vec![], vec![], vec![], None, None),
         }
     }
-}
-
-/// Format an item with default Standard detail level
-pub fn format_item(item: &Item) -> FormattedItem {
-    let mut formatter = ItemFormatter::new(DetailLevel::default(), None);
-    formatter.format_item(item)
-}
-
-/// Format an item with specific detail level
-pub fn format_item_with_detail(item: &Item, detail_level: DetailLevel) -> FormattedItem {
-    let mut formatter = ItemFormatter::new(detail_level, None);
-    formatter.format_item(item)
-}
-
-/// Format an item with specific detail level and token budget
-pub fn format_item_with_budget(
-    item: &Item,
-    detail_level: DetailLevel,
-    budget: usize,
-) -> FormattedItem {
-    let mut formatter = ItemFormatter::new(detail_level, Some(budget));
-    formatter.format_item(item)
 }
 
 /// Helper function for formatting generics (imported from detail)

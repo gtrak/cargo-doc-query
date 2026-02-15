@@ -38,15 +38,6 @@ impl BudgetTracker {
         }
     }
 
-    /// Create a new BudgetTracker with custom warning threshold
-    pub fn with_threshold(budget: Option<usize>, threshold: f32) -> Self {
-        Self {
-            total_budget: budget,
-            current_tokens: 0,
-            warning_threshold: threshold,
-        }
-    }
-
     /// Track an item's token usage
     ///
     /// Returns the tokens used and the action to take (Include or Truncate)
@@ -95,21 +86,6 @@ impl BudgetTracker {
                 }
             }
         }
-    }
-
-    /// Get current token count
-    pub fn current(&self) -> usize {
-        self.current_tokens
-    }
-
-    /// Get total budget (if set)
-    pub fn total(&self) -> Option<usize> {
-        self.total_budget
-    }
-
-    /// Reset the tracker
-    pub fn reset(&mut self) {
-        self.current_tokens = 0;
     }
 }
 
@@ -167,7 +143,7 @@ pub fn estimate_item_tokens(formatted: &FormattedItem) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::item::{FieldInfo, FunctionModifiers, NestedItemInfo, VariantInfo};
+    use crate::format::item::FieldInfo;
 
     fn create_test_formatted_item() -> FormattedItem {
         FormattedItem {
@@ -230,19 +206,6 @@ mod tests {
         // At budget
         tracker.track_item(50, 0);
         assert_eq!(tracker.remaining(), Some(0));
-    }
-
-    #[test]
-    fn test_budget_tracker_warning_threshold() {
-        let mut tracker = BudgetTracker::with_threshold(Some(100), 0.8);
-
-        // Below threshold (79 tokens = 79%)
-        let _ = tracker.track_item(79, 0);
-        assert!(!tracker.is_warning_needed());
-
-        // At threshold (80 tokens = 80%)
-        let _ = tracker.track_item(1, 0);
-        assert!(tracker.is_warning_needed());
     }
 
     #[test]
