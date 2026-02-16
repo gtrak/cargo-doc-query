@@ -2,6 +2,8 @@
 
 Fast, deterministic structured API extraction from Rust crates for LLM context reduction.
 
+[Vibe-kit Disclaimer](https://github.com/gtrak/vibe-kit/tree/main/DISCLAIMER.md)
+
 ## Overview
 
 cargo-doc-query generates an index from your dependencies' rustdoc JSON output and allows you to quickly query methods, traits, and types with sub-100ms response times. It's designed to provide structured API information that's more concise than raw source code but more useful than simple method listings.
@@ -19,7 +21,7 @@ cargo-doc-query generates an index from your dependencies' rustdoc JSON output a
 ## Installation
 
 ```bash
-cargo install cargo-doc-query
+cargo install --git https://github.com/gtrak/cargo-doc-query
 ```
 
 Or run directly:
@@ -32,21 +34,19 @@ cargo run --quiet -- query <path>
 
 ```bash
 # Build the documentation index (run first)
-cargo doc-query build
+cargo-doc-query build
 
 # Query a type's methods and traits
-cargo doc-query query std::vec::Vec
-cargo doc-query query anyhow::Error --minimal
+cargo-doc-query query std::vec::Vec
+cargo-doc-query query anyhow::Error --minimal
 
 # Query with nested type expansion
-cargo doc-query query anyhow::Error --depth 2
-cargo doc-query query std::collections::HashMap --depth 1
+cargo-doc-query query anyhow::Error --depth 2
+cargo-doc-query query std::collections::HashMap --depth 1
 
 # Query with token budget for LLM contexts
-cargo doc-query query serde_json::Value --tokens 500
+cargo-doc-query query serde_json::Value --tokens 500
 ```
-
-## v1.1 New Features
 
 ### Filter Flags
 
@@ -54,16 +54,16 @@ Filter results using glob patterns and criteria. Multiple filters combine with A
 
 ```bash
 # Include only items from specific crate
-cargo doc-query query Vec --include "std::*"
+cargo-doc-query query Vec --include "std::*"
 
 # Exclude test-related items
-cargo doc-query query Error --exclude "*test*"
+cargo-doc-query query Error --exclude "*test*"
 
 # Filter by item kind (struct, enum, trait, function, etc.)
-cargo doc-query query Serialize --kind struct
+cargo-doc-query query Serialize --kind struct
 
 # Combine filters
-cargo doc-query query Serialize --include "serde::*" --kind fn
+cargo-doc-query query Serialize --include "serde::*" --kind fn
 ```
 
 **Available Filter Flags:**
@@ -89,13 +89,13 @@ Control the amount of metadata displayed in output:
 
 ```bash
 # Minimal - signatures only
-cargo doc-query query Vec --minimal
+cargo-doc-query query Vec --minimal
 
 # Standard - default output
-cargo doc-query query Vec
+cargo-doc-query query Vec
 
 # Detailed - includes visibility, generics, docs, attributes
-cargo doc-query query Vec --detailed
+cargo-doc-query query Vec --detailed
 ```
 
 ### Token Budget
@@ -104,10 +104,10 @@ Limit output tokens to control LLM context usage:
 
 ```bash
 # Limit to approximately 500 tokens
-cargo doc-query query serde_json::Value --tokens 500
+cargo-doc-query query serde_json::Value --tokens 500
 
 # Strict limit with warning
-cargo doc-query query Vec --tokens 200
+cargo-doc-query query Vec --tokens 200
 ```
 
 The token budget is approximate and uses a heuristic based on field counts and text length.
@@ -118,13 +118,13 @@ Recursively expand nested types to understand complex structures:
 
 ```bash
 # No expansion - just methods and traits
-cargo doc-query query Error
+cargo-doc-query query Error
 
 # Expand direct field types (depth 1)
-cargo doc-query query Error --depth 1
+cargo-doc-query query Error --depth 1
 
 # Recursively expand nested types
-cargo doc-query query HashMap --depth 2
+cargo-doc-query query HashMap --depth 2
 ```
 
 ### JSON Output
@@ -133,10 +133,10 @@ For programmatic use:
 
 ```bash
 # JSON output for parsing
-cargo doc-query query Vec --json
+cargo-doc-query query Vec --json
 
 # Combine with filters
-cargo doc-query query Serialize --json --kind struct
+cargo-doc-query query Serialize --json --kind struct
 ```
 
 ## CLI Reference
