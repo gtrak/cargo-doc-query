@@ -236,7 +236,7 @@ fn test_invalid_kind() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Should either return empty results or fail gracefully
-    let is_graceful = output.status.code() == Some(3)  // NO_RESULTS
+    let is_graceful = output.status.code() == Some(1)  // NOT_FOUND
         || stdout.trim().is_empty()
         || stderr.contains("kind");
 

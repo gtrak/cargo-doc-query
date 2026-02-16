@@ -1,6 +1,5 @@
 mod cargo;
 mod cli;
-mod index;
 
 use cargo_doc_query::cache;
 use cargo_doc_query::error;

@@ -5,13 +5,13 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::index::graph::{CrateGraph, CrateNode};
 use cargo_doc_query::cache::key::CacheKeyInputs;
 use cargo_doc_query::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
 use cargo_doc_query::parser::validate::validate_format_version;
 
 pub struct BuildCommand {
     manifest_path: PathBuf,
+    #[allow(dead_code)]
     all_features: bool,
     quiet: bool,
 }
@@ -253,10 +253,10 @@ impl BuildCommand {
         let json_paths = self.generate_rustdoc_json(&deps)?;
 
         // 5. Parse and validate all JSON files
-        let mut graph = CrateGraph::new();
         let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
 
         let json_paths_refs: Vec<_> = json_paths.iter().collect();
+        let mut ct = 0;
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
             process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
 
@@ -271,16 +271,10 @@ impl BuildCommand {
                 // Silently continue - validation failed but we'll try to parse anyway
             }
 
-            // Add crate to graph
-            let node = CrateNode {
-                name: pkg_name.clone(),
-                version: pkg_version.clone(),
-                json_path: json_path.clone(),
-            };
-            graph.add_crate(node);
+            ct += 1;
             process_pb.inc(1);
         }
-        process_pb.finish_with_message(format!("Indexed {} crates", graph.crate_count()));
+        process_pb.finish_with_message(format!("Indexed {} crates", ct));
 
         // 8. Save to cache (CACHE-03)
         let save_spinner = self.create_spinner("Saving cache...");
