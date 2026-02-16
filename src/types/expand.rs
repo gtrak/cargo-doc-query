@@ -545,7 +545,7 @@ mod tests {
         assert_eq!(node.fields.len(), 1);
         assert_eq!(node.fields[0].name, "x");
         assert_eq!(node.fields[0].type_path, "i32");
-        assert_eq!(node.fields[0].is_optional, false);
+        assert!(!node.fields[0].is_optional);
         assert!(node.fields[0].nested_type_id.is_none());
     }
 
@@ -703,7 +703,7 @@ mod tests {
         let field = FieldInfo::new("x".to_string(), "i32".to_string(), false);
         assert_eq!(field.name, "x");
         assert_eq!(field.type_path, "i32");
-        assert_eq!(field.is_optional, false);
+        assert!(!field.is_optional);
         assert!(field.nested_type_id.is_none());
     }
 

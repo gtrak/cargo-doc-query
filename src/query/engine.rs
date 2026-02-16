@@ -622,7 +622,6 @@ impl QueryEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustdoc_types::{FunctionHeader, ItemEnum, Type};
 
     #[test]
     fn test_query_options_default() {

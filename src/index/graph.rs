@@ -40,6 +40,7 @@ impl CrateGraph {
         idx
     }
 
+    // TODO: what is this for?
     pub fn add_dependency(&mut self, from: NodeIndex, to: NodeIndex, kind: DependencyEdge) {
         self.graph.add_edge(from, to, kind);
     }

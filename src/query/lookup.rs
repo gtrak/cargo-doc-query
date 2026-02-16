@@ -75,7 +75,6 @@ impl PathResolver {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
     use super::*;
     use rustdoc_types::Crate;
@@ -185,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_get_item_from_crates_nonexistent_id() {
-        let mut krate = Crate {
+        let krate = Crate {
             root: Id(1),
             crate_version: None,
             includes_private: true,

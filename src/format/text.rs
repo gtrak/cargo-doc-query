@@ -69,9 +69,9 @@ fn format_query_match(match_: &QueryMatch) {
     println!("{}", style("─".repeat(60)).dim());
 
     match &match_.content {
-        QueryContent::Type(type_result) => format_type_result(&type_result),
-        QueryContent::Trait(trait_result) => format_trait_result(&trait_result),
-        QueryContent::Module(module_result) => format_module_result(&module_result),
+        QueryContent::Type(type_result) => format_type_result(type_result),
+        QueryContent::Trait(trait_result) => format_trait_result(trait_result),
+        QueryContent::Module(module_result) => format_module_result(module_result),
     }
 }
 
@@ -571,8 +571,8 @@ mod tests {
 
     #[test]
     fn test_format_type_result_basic() {
-        let mut result = TypeResult::new("struct".to_string());
-        let mut match_ = QueryMatch::new(
+        let result = TypeResult::new("struct".to_string());
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::string::String".to_string(),
@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn test_format_type_result_with_methods() {
         let mut result = TypeResult::new("struct".to_string());
-        let mut method = MethodOutput::new(
+        let method = MethodOutput::new(
             "new".to_string(),
             "fn new()".to_string(),
             "String".to_string(),
@@ -596,7 +596,7 @@ mod tests {
         );
         result.methods.push(method.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::string::String".to_string(),
@@ -611,11 +611,11 @@ mod tests {
     #[test]
     fn test_format_type_result_with_trait_impls() {
         let mut result = TypeResult::new("struct".to_string());
-        let mut trait_impl =
+        let trait_impl =
             TraitImplOutput::new("Display".to_string(), "std::fmt::Display".to_string());
         result.trait_implementations.push(trait_impl.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::string::String".to_string(),
@@ -634,7 +634,7 @@ mod tests {
         assoc_type.bounds = Some("T: Clone".to_string());
         result.add_associated_type(assoc_type.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::clone::Clone".to_string(),
@@ -649,7 +649,7 @@ mod tests {
     #[test]
     fn test_format_trait_result_with_methods() {
         let mut result = TraitResult::new("Clone".to_string(), "std::clone::Clone".to_string());
-        let mut method = MethodOutput::new(
+        let method = MethodOutput::new(
             "clone".to_string(),
             "fn clone(&self) -> Self".to_string(),
             "Self".to_string(),
@@ -658,7 +658,7 @@ mod tests {
         );
         result.add_method(method.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::clone::Clone".to_string(),
@@ -673,14 +673,14 @@ mod tests {
     #[test]
     fn test_format_module_result() {
         let mut result = crate::types::query::ModuleResult::new();
-        let mut item = crate::types::query::ModuleItem::new(
+        let item = crate::types::query::ModuleItem::new(
             "Function".to_string(),
             "function".to_string(),
             "std::function::Function".to_string(),
         );
         result.items.push(item.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::function".to_string(),
@@ -695,14 +695,14 @@ mod tests {
     #[test]
     fn test_format_module_result_with_re_exports() {
         let mut result = crate::types::query::ModuleResult::new();
-        let mut item = crate::types::query::ModuleItem::new(
+        let item = crate::types::query::ModuleItem::new(
             "HashMap".to_string(),
             "re-export".to_string(),
             "std::collections::HashMap".to_string(),
         );
         result.items.push(item.clone());
 
-        let mut match_ = QueryMatch::new(
+        let match_ = QueryMatch::new(
             "std".to_string(),
             "1.0.0".to_string(),
             "std::collections".to_string(),

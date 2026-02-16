@@ -453,7 +453,7 @@ mod tests {
     fn test_truncate_docs_no_space_after_punctuation() {
         // Sentence ending without space before end of text
         let docs = "This is sentence one.This is sentence two.";
-        let (result, truncated) = truncate_docs(docs, 4);
+        let (_result, truncated) = truncate_docs(docs, 4);
 
         // Should still truncate reasonably
         assert!(truncated);

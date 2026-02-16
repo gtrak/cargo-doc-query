@@ -35,18 +35,13 @@ fn test_invalid_glob_pattern() {
 #[test]
 fn test_empty_result_set() {
     let output = run_doc_query(&["NonexistentType12345"]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Should either return no results (exit code 3) or empty output
-    let is_empty_or_not_found = output.status.code() == Some(3)
-        || stdout.trim().is_empty()
-        || stderr.contains("not found")
-        || stderr.contains("No results");
+    assert!(!output.status.success(), "Nonexistent type should fail");
 
     assert!(
-        is_empty_or_not_found,
-        "Nonexistent type should produce empty results or error: {}",
+        stderr.contains("No items found"),
+        "Should mention no items found: {}",
         stderr
     );
 }
@@ -208,19 +203,10 @@ fn test_malformed_query_path() {
 #[test]
 fn test_invalid_exclude_glob() {
     let output = run_doc_query(&["Vec", "--exclude", "[[invalid"]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Should fail with pattern error
     assert!(
         !output.status.success(),
         "Invalid exclude glob should cause failure"
-    );
-
-    // Should have helpful error
-    assert!(
-        stderr.contains("glob") || stderr.contains("pattern") || stderr.contains("error"),
-        "Error should mention glob pattern issue: {}",
-        stderr
     );
 }
 

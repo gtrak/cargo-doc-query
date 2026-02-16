@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.90"
 name = "cargo-doc-query"
 version = "0.1.0"
 edition = "2024"

@@ -22,7 +22,6 @@ fn test_filters_tokens_depth_combined() {
         "500",
     ]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Should handle complex combination gracefully
@@ -41,7 +40,6 @@ fn test_filters_tokens_depth_combined() {
 fn test_filters_minimal_mode() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--minimal"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -59,7 +57,6 @@ fn test_filters_minimal_mode() {
 fn test_filters_detailed_mode() {
     let output = run_doc_query(&["Vec", "--kind", "trait", "--detailed"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -78,7 +75,6 @@ fn test_json_output_format() {
     let output = run_doc_query(&["Vec", "--json"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
     if output.status.success() && !stdout.trim().is_empty() {
         // Verify it's valid JSON structure
@@ -97,7 +93,6 @@ fn test_json_with_filters() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--json"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
     if output.status.success() && !stdout.trim().is_empty() {
         // Should be valid JSON if present
@@ -116,7 +111,6 @@ fn test_json_backward_compatibility() {
     let output = run_doc_query(&["Vec", "--json", "--include", "std::*"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
     if output.status.success() && !stdout.trim().is_empty() {
         // Basic JSON should be parseable
@@ -151,9 +145,11 @@ fn test_token_budget_limits_output() {
             1.0
         };
         assert!(
-            ratio <= 1.5,  // Allow some variance
+            ratio <= 1.5, // Allow some variance
             "Small budget ({}) should produce smaller or similar output to large budget ({}), ratio: {}",
-            stdout_small, stdout_large, ratio
+            stdout_small,
+            stdout_large,
+            ratio
         );
     }
 }
@@ -169,7 +165,6 @@ fn test_depth_expansion_with_filters() {
         "std::collections::*",
     ]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -240,7 +235,6 @@ fn test_multiple_filter_types() {
         "pub",
     ]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -258,7 +252,6 @@ fn test_multiple_filter_types() {
 fn test_quiet_flag_with_filters() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--quiet"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -276,7 +269,6 @@ fn test_quiet_flag_with_filters() {
 fn test_no_color_flag_with_filters() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--no-color"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -307,7 +299,6 @@ fn test_expand_command_with_filters() {
         .output()
         .expect("Failed to execute cargo doc-query");
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -325,7 +316,6 @@ fn test_expand_command_with_filters() {
 fn test_query_common_crate() {
     let output = run_doc_query(&["Serialize", "--include", "serde*"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Should handle common crates gracefully
@@ -345,7 +335,6 @@ fn test_query_common_crate() {
 fn test_kind_filter_enum() {
     let output = run_doc_query(&["Result", "--kind", "enum"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -363,7 +352,6 @@ fn test_kind_filter_enum() {
 fn test_kind_filter_struct() {
     let output = run_doc_query(&["Vec", "--kind", "struct"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -381,7 +369,6 @@ fn test_kind_filter_struct() {
 fn test_kind_filter_trait() {
     let output = run_doc_query(&["Clone", "--kind", "trait"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(

@@ -3,49 +3,16 @@
 //! Tests filter + depth, filter + token budget, filter + minimal mode combinations.
 
 mod utils;
-use std::process::Command;
 use utils::run_doc_query;
-
-/// Helper to check if command succeeded
-fn assert_success(output: &std::process::Output, msg: &str) {
-    assert!(
-        output.status.success(),
-        "{}: command failed with exit code {:?}\nstdout: {}\nstderr: {}",
-        msg,
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-/// Helper to check if command failed with specific exit code
-fn assert_exit_code(output: &std::process::Output, code: i32, msg: &str) {
-    assert_eq!(
-        output.status.code(),
-        Some(code),
-        "{}: expected exit code {} but got {:?}\nstderr: {}",
-        msg,
-        code,
-        output.status.code(),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
 
 /// Test filter + depth combination
 /// cargo doc-query query Vec --include "std::*" --depth 2
 #[test]
 fn test_filter_with_depth() {
-    // First ensure we have a cache built
-    let build_output = Command::new("cargo")
-        .args(["run", "--", "build"])
-        .output()
-        .expect("Failed to execute cargo doc-query build");
-
     // Build might fail if deps not available, but continue to query test
     let output = run_doc_query(&["Vec", "--include", "std::*", "--depth", "2"]);
 
     // Should either succeed or gracefully handle missing deps
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Check that it's either successful or a known error (no cache, etc.)
@@ -65,7 +32,6 @@ fn test_filter_with_depth() {
 fn test_filter_with_token_budget() {
     let output = run_doc_query(&["Vec", "--kind", "function", "--tokens", "500"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     // Check either success or known error
@@ -85,7 +51,6 @@ fn test_filter_with_token_budget() {
 fn test_filter_with_minimal() {
     let output = run_doc_query(&["Vec", "--exclude", "*test*", "--minimal"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -114,7 +79,6 @@ fn test_filter_depth_tokens_combined() {
         "300",
     ]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -132,7 +96,6 @@ fn test_filter_depth_tokens_combined() {
 fn test_only_filter() {
     let output = run_doc_query(&["Vec", "--only", "std::*"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -150,7 +113,6 @@ fn test_only_filter() {
 fn test_crate_filter() {
     let output = run_doc_query(&["Vec", "--crate-filter", "std"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -168,7 +130,6 @@ fn test_crate_filter() {
 fn test_visibility_filter() {
     let output = run_doc_query(&["Vec", "--visibility", "pub"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -186,7 +147,6 @@ fn test_visibility_filter() {
 fn test_filter_with_detailed() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--detailed"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -232,7 +192,6 @@ fn test_filter_with_json_output() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--json"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
     // If successful, should have valid JSON or empty
     if output.status.success() {
@@ -252,7 +211,6 @@ fn test_filter_with_json_output() {
 fn test_multiple_include_patterns() {
     let output = run_doc_query(&["Vec", "--include", "std::*", "--include", "core::*"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -270,7 +228,6 @@ fn test_multiple_include_patterns() {
 fn test_multiple_exclude_patterns() {
     let output = run_doc_query(&["Vec", "--exclude", "*test*", "--exclude", "*private*"]);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(

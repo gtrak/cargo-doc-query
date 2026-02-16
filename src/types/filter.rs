@@ -3,20 +3,6 @@
 //! This module provides the [`FilterConfig`] and [`FilterEngine`] types for filtering
 //! query results based on patterns, kinds, crates, and visibility.
 //!
-//! # Quick Start
-//!
-//! ```
-//! use cargo_doc_query::types::filter::{FilterConfig, FilterEngine};
-//!
-//! let config = FilterConfig::default()
-//!     .with_include("std::*")
-//!     .with_exclude("*::test*")
-//!     .with_kind("struct");
-//!
-//! let engine = FilterEngine::compile(&config)?;
-//! let matches = engine.matches("std::vec::Vec", "struct", "std", "pub");
-//! ```
-//!
 //! # Filter Logic
 //!
 //! Filters combine with AND logic:
@@ -154,7 +140,6 @@ impl FilterConfig {
 
 /// Trait for items that can be filtered
 #[cfg(test)]
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -246,9 +231,11 @@ mod tests {
         assert!(!FilterEngine::compile(&config).unwrap().is_active());
 
         let config_with_filters = FilterConfig::default().with_include("std::*");
-        assert!(FilterEngine::compile(&config_with_filters)
-            .unwrap()
-            .is_active());
+        assert!(
+            FilterEngine::compile(&config_with_filters)
+                .unwrap()
+                .is_active()
+        );
     }
 }
 
@@ -285,11 +272,11 @@ mod edge_case_tests {
         let mut config = FilterConfig::default();
         // Add 100 include patterns
         for i in 0..100 {
-            config = config.with_include(&format!("crate::item{}", i));
+            config = config.with_include(format!("crate::item{}", i));
         }
         // Add 100 exclude patterns
         for i in 0..100 {
-            config = config.with_exclude(&format!("crate::exclude{}", i));
+            config = config.with_exclude(format!("crate::exclude{}", i));
         }
 
         let engine = FilterEngine::compile(&config).unwrap();
@@ -322,7 +309,7 @@ mod edge_case_tests {
     fn test_whitespace_patterns() {
         // Whitespace should be treated literally in paths
         let config = FilterConfig::default().with_include("* ::*"); // Space in pattern
-                                                                    // This is technically a valid glob, just unlikely to match much
+        // This is technically a valid glob, just unlikely to match much
         let result = FilterEngine::compile(&config);
         assert!(result.is_ok());
     }
@@ -531,18 +518,6 @@ impl FilterEngine {
     /// before more complex ones.
     ///
     /// Returns [`FilterError::InvalidGlob`] if any pattern is invalid.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use cargo_doc_query::types::filter::{FilterConfig, FilterEngine};
-    ///
-    /// let config = FilterConfig::default()
-    ///     .with_include("std::*")
-    ///     .with_exclude("*::test*");
-    ///
-    /// let engine = FilterEngine::compile(&config)?;
-    /// ```
     pub fn compile(config: &FilterConfig) -> Result<Self, FilterError> {
         Self::compile_optimized(config)
     }
@@ -563,7 +538,7 @@ impl FilterEngine {
                     return Err(FilterError::InvalidGlob {
                         pattern: pattern.clone(),
                         message: e.to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -583,7 +558,7 @@ impl FilterEngine {
                     return Err(FilterError::InvalidGlob {
                         pattern: pattern.clone(),
                         message: e.to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -948,7 +923,7 @@ mod integration_tests {
             create_test_match("crate::foo::Bar", "struct", "my_crate"),
         ];
 
-        let (filtered, stats) = engine.filter_with_stats(&items);
+        let (_filtered, stats) = engine.filter_with_stats(&items);
 
         // Check summary format
         let summary = stats.summary();

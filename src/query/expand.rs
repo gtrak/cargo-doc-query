@@ -778,7 +778,6 @@ mod tests {
 
     #[test]
     fn test_would_exceed_budget_unlimited() {
-        let config = TokenConfig::default();
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
                 format_version: 1,
