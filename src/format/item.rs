@@ -72,12 +72,13 @@ impl FormattedItem {
         }
 
         // Visibility
-        if let Some(ref vis) = self.visibility
-            && vis != "private"
-        {
-            output.push_str(&format!("  {}\n", vis));
+        // Visibility
+        if let Some(ref vis) = self.visibility {
+            if vis != "private" {
+                output.push_str(&format!("  {}
+", vis));
+            }
         }
-
         // Documentation
         if let Some(ref docs) = self.docs {
             let doc_lines: Vec<&str> = docs.lines().collect();

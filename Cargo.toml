@@ -2,7 +2,7 @@
 rust-version = "1.90"
 name = "cargo-doc-query"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 
@@ -40,8 +40,3 @@ glob = "0.3.3"
 proptest = "1.4"
 tempfile = "3.25"
 insta = { version = "1.40", features = ["yaml"] }
-
-[[bench]]
-name = "filter_benchmark"
-harness = false
-# tarpaulin = "0.29"  # Temporarily disabled - not available on crates.io yet
