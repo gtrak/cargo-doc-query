@@ -455,8 +455,8 @@ impl TypeNode {
             visibility: self.visibility.clone(),
             fields: Vec::new(),         // Omit field details
             variants: Vec::new(),       // Omit variant details
-            items: Vec::new(),          // Omit item details
-            generic_params: Vec::new(), // Omit generic details
+            items: self.items.clone(),     // Keep module contents in minimal
+            generic_params: self.generic_params.clone(), // Keep generics in minimal
             depth: self.depth,
             field_count: Some(self.fields.len()),
             variant_count: Some(self.variants.len()),
@@ -849,7 +849,7 @@ mod tests {
         // Minimal should have counts but no details
         assert!(!minimal_json.contains("\"x\"")); // No field names
         assert!(!minimal_json.contains("\"y\""));
-        assert!(!minimal_json.contains("\"T\"")); // No generic params
+        // Minimal now keeps generic params per user request
         assert!(!minimal_json.contains("\"is_deprecated\"")); // Cleared in minimal
         assert!(!minimal_json.contains("\"attributes\""));
     }

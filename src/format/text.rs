@@ -425,11 +425,11 @@ pub fn format_expand_result_with_formatter(
         VariantInfo as ItemVariantInfo,
     };
 
-    println!(
-        "{}",
-        style(format!("Expanding: {}", root_path)).bold().cyan()
-    );
-    println!("{}", style("─".repeat(60)).dim());
+    // Header
+    println!();
+    println!("{}", style(format!("📦 {}", root_path)).bold().cyan());
+    println!("{}", style("═".repeat(70)).dim());
+    println!();
 
     if result.graph.nodes.is_empty() {
         println!("{}", style("No types found in expansion").yellow());
@@ -457,16 +457,11 @@ pub fn format_expand_result_with_formatter(
             } else {
                 "  ".to_string()
             };
-            let heading = if depth == 0 {
-                style(format!("{}:", root_path)).bold()
-            } else {
-                style(format!("Depth {}:", depth)).bold().dim()
-            };
-
+            // Print depth heading only for depth > 0
             if depth > 0 {
-                println!("\n{}", heading);
-            } else {
-                println!("{}", heading);
+                println!();
+                println!("{}", style(format!("▶ Depth {}", depth)).bold().dim());
+                println!("{}", style("─".repeat(50)).dim());
             }
 
             for node in nodes {

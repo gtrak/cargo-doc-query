@@ -85,6 +85,7 @@ impl BuildCommand {
         cmd.arg("+nightly")
             .arg("doc")
             .arg("--workspace")
+            .arg("--all-features")
             .arg("--message-format=json");
 
         // Set RUSTDOCFLAGS for JSON output

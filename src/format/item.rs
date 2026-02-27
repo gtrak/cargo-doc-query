@@ -55,51 +55,123 @@ pub struct FormattedItem {
 }
 
 impl FormattedItem {
-    /// Render this FormattedItem as a formatted string
-    /// Uses Standard detail level - shows kind, id, generics, visibility, deprecation, fields, variants
+    /// Render this FormattedItem as a formatted string with colors
     pub fn render(&self) -> String {
+        use console::style;
         let mut output = String::new();
 
-        // Kind (colored cyan)
-        output.push_str(&format!("{}\n", self.kind));
+        // Header line: kind and name
+        let name = self.name.as_deref().unwrap_or("");
+        output.push_str(&format!(
+            "{} {}{}\n",
+            style(&self.kind).bold().green(),
+            style(name).yellow(),
+            self.generics.as_deref().unwrap_or("")
+        ));
 
-        // ID/Path
-        output.push_str(&format!("  {}\n", self.id));
+        // Path line
+        output.push_str(&format!("  {}\n", style(&self.id).dim()));
 
-        // Generics
-        if let Some(ref gens) = self.generics {
-            output.push_str(&format!("  {}\n", gens));
-        }
-
-        // Visibility
         // Visibility
         if let Some(ref vis) = self.visibility {
-            if vis != "private" {
-                output.push_str(&format!("  {}
-", vis));
+            if vis != "private" && !vis.is_empty() {
+                output.push_str(&format!("  {}\n", style(vis).cyan()));
             }
         }
-        // Documentation
-        if let Some(ref docs) = self.docs {
-            let doc_lines: Vec<&str> = docs.lines().collect();
-            for line in doc_lines {
-                output.push_str(&format!("  {}\n", line));
-            }
+
+        // Attributes/Modifiers
+        for attr in &self.attributes {
+            output.push_str(&format!("  {}\n", style(attr).magenta()));
         }
 
         // Deprecation
         if self.is_deprecated {
-            output.push_str("  deprecated\n");
+            output.push_str(&format!("  {}\n", style("deprecated").red().bold()));
+            if let Some(ref note) = self.deprecation_note {
+                output.push_str(&format!("    → {}\n", style(note).yellow()));
+            }
+        }
+
+        // Documentation
+        if let Some(ref docs) = self.docs {
+            let trimmed = docs.trim();
+            if !trimmed.is_empty() {
+                output.push_str("\n");
+                for line in trimmed.lines() {
+                    output.push_str(&format!("  {}\n", style(line).dim()));
+                }
+            }
         }
 
         // Fields
-        for field in &self.fields {
-            output.push_str(&format!("  field: {}\n", field.name));
+        if !self.fields.is_empty() {
+            output.push_str(&format!("\n  {}", style("Fields:").bold()));
+            for field in &self.fields {
+                let optional = if field.is_optional {
+                    style(" (optional)").yellow()
+                } else {
+                    style("").dim()
+                };
+                output.push_str(&format!(
+                    "\n    • {}{}: {}",
+                    style(&field.name).yellow(),
+                    optional,
+                    style(&field.type_path).dim()
+                ));
+            }
         }
 
         // Variants
-        for variant in &self.variants {
-            output.push_str(&format!("  variant: {}\n", variant.name));
+        if !self.variants.is_empty() {
+            output.push_str(&format!("\n  {}", style("Variants:").bold().magenta()));
+            for variant in &self.variants {
+                if variant.fields.is_empty() {
+                    output.push_str(&format!("\n    • {}", style(&variant.name).yellow()));
+                } else {
+                    output.push_str(&format!(
+                        "\n    • {} ({})",
+                        style(&variant.name).yellow(),
+                        style(format!("{} fields", variant.fields.len())).dim()
+                    ));
+                }
+            }
+        }
+
+        // Module items (nested items) - grouped by kind
+        if !self.items.is_empty() {
+            let mut by_kind: std::collections::HashMap<&str, Vec<&NestedItemInfo>> =
+                std::collections::HashMap::new();
+            for item in &self.items {
+                by_kind.entry(&item.kind).or_default().push(item);
+            }
+
+            let kind_order = [
+                "struct", "enum", "trait", "function", "type", "const", "static", "macro", "re-export", "module", "other",
+            ];
+
+            for kind in &kind_order {
+                if let Some(items) = by_kind.get(kind) {
+                    if !items.is_empty() {
+                        let kind_label = match *kind {
+                            "struct" => style("Structs").green(),
+                            "enum" => style("Enums").magenta(),
+                            "trait" => style("Traits").cyan(),
+                            "function" => style("Functions").yellow(),
+                            "type" => style("Types").blue(),
+                            "re-export" => style("Re-exports").dim(),
+                            _ => style(*kind).dim(),
+                        };
+                        output.push_str(&format!("\n  {}", kind_label));
+                        for item in items {
+                            output.push_str(&format!(
+                                "\n    • {}: {}",
+                                style(&item.name).yellow(),
+                                style(&item.path).dim()
+                            ));
+                        }
+                    }
+                }
+            }
         }
 
         output
