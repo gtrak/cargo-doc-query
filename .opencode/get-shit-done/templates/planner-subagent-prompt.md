@@ -7,57 +7,31 @@ Template for spawning gsd-planner agent. The agent contains all planning experti
 ## Template
 
 ```markdown
-<planning_context_summary>
+<planning_context>
 
 **Phase:** {phase_number}
 **Mode:** {standard | gap_closure}
 
-**State Frontmatter:**
-{state_frontmatter}
+**Project State:**
+@.planning/STATE.md
 
-**Current Position:**
-{state_position}
+**Roadmap:**
+@.planning/ROADMAP.md
 
-**Decisions Made:**
-{state_decisions}
+**Requirements (if exists):**
+@.planning/REQUIREMENTS.md
 
-**Pending Todos:**
-{state_pending}
+**Phase Context (if exists):**
+@.planning/phases/{phase_dir}/{phase_num}-CONTEXT.md
 
-**Phase Goal:**
-{phase_roadmap}
+**Research (if exists):**
+@.planning/phases/{phase_dir}/{phase_num}-RESEARCH.md
 
-**Phase Requirements:**
-{phase_requirements}
+**Gap Closure (if --gaps mode):**
+@.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md
+@.planning/phases/{phase_dir}/{phase_num}-UAT.md
 
-**Phase Context Frontmatter (if exists):**
-{context_frontmatter}
-
-**Research Frontmatter (if exists):**
-{research_frontmatter}
-
-**Gap Closure Frontmatter (if --gaps mode):**
-{verification_frontmatter}
-{uat_frontmatter}
-
-</planning_context_summary>
-
-<context_references>
-
-**Full files available for reference when needed:**
-- @.planning/STATE.md
-- @.planning/ROADMAP.md
-- @.planning/REQUIREMENTS.md (if exists)
-- @.planning/phases/{phase_dir}/{phase}-CONTEXT.md (if exists)
-- @.planning/phases/{phase_dir}/{phase}-RESEARCH.md (if exists)
-- @.planning/phases/{phase_dir}/{phase}-VERIFICATION.md (if --gaps mode)
-- @.planning/phases/{phase_dir}/{phase}-UAT.md (if --gaps mode)
-
-**Reference reading guidelines:**
-- Read full file when you need complete details
-- Use section-specific reads when specific information needed
-- Don't read all referenced files at once
-</context_references>
+</planning_context>
 
 <downstream_consumer>
 Output consumed by /gsd-execute-phase

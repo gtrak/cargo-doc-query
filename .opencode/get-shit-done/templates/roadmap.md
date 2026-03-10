@@ -2,6 +2,28 @@
 
 Template for `.planning/ROADMAP.md`.
 
+## Provenance Requirements
+
+**Every phase must include provenance tagging:**
+
+- **[A]** = Authoritative-driven (derived from human requirements in REQUIREMENTS.authoritative.md)
+- **[D]** = Derived (generated during planning from REQUIREMENTS.derived.md)
+
+**Required fields per phase:**
+- **Provenance**: [A] or [D] tag
+- **DerivedFrom**: List of authoritative requirement IDs (e.g., `DerivedFrom: A1, A3, A5`)
+- **Supersedes**: (optional) Previous phase ID if this replaces it
+
+**JUSTIFICATION REQUIREMENTS:**
+Every phase MUST include justification:
+
+- **Forces**: Which authoritative requirement forces this phase?
+- **Fails if removed**: What fails if this phase is removed?
+
+Planning FAILS if these fields are empty.
+
+No phase may exist without lineage reference.
+
 ## Initial Roadmap (v1.0 Greenfield)
 
 ```markdown
@@ -27,9 +49,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: [Name]
+**Provenance**: [A] — Authoritative-driven
+**DerivedFrom**: AUTH-01, AUTH-02, AUTH-03, SETUP-01
+**Forces**: [Which requirement makes this phase necessary]
+**Fails if removed**: [What breaks without this phase]
 **Goal**: [What this phase delivers]
 **Depends on**: Nothing (first phase)
-**Requirements**: [REQ-01, REQ-02, REQ-03]
+**Requirements**: [REQ-01, REQ-02, REQ-03]  <!-- brackets optional, parser handles both formats -->
 **Success Criteria** (what must be TRUE):
   1. [Observable behavior from user perspective]
   2. [Observable behavior from user perspective]
@@ -42,6 +68,10 @@ Plans:
 - [ ] 01-03: [Brief description of third plan]
 
 ### Phase 2: [Name]
+**Provenance**: [A] — Authoritative-driven
+**DerivedFrom**: PROF-01, PROF-02, CONT-01
+**Forces**: [Which requirement makes this phase necessary]
+**Fails if removed**: [What breaks without this phase]
 **Goal**: [What this phase delivers]
 **Depends on**: Phase 1
 **Requirements**: [REQ-04, REQ-05]
@@ -55,6 +85,11 @@ Plans:
 - [ ] 02-02: [Brief description]
 
 ### Phase 2.1: Critical Fix (INSERTED)
+**Provenance**: [D] — Derived
+**DerivedFrom**: (technical debt from Phase 1 implementation)
+**Forces**: [What technical requirement forces this]
+**Fails if removed**: [What breaks without this fix]
+**Supersedes**: (none)
 **Goal**: [Urgent work inserted between phases]
 **Depends on**: Phase 2
 **Success Criteria** (what must be TRUE):
@@ -65,6 +100,10 @@ Plans:
 - [ ] 02.1-01: [Description]
 
 ### Phase 3: [Name]
+**Provenance**: [A] — Authoritative-driven
+**DerivedFrom**: CONT-02, CONT-03, SOCL-01
+**Forces**: [Which requirement makes this phase necessary]
+**Fails if removed**: [What breaks without this phase]
 **Goal**: [What this phase delivers]
 **Depends on**: Phase 2
 **Requirements**: [REQ-06, REQ-07, REQ-08]

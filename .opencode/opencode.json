@@ -1,11 +1,13 @@
 {
-    "$schema": "https://opencode.ai/config.json",
-    "permission": {
-        "read": {
-            "/home/gary/dev/opencode_rs/.opencode/get-shit-done/*": "allow"
-        },
-        "external_directory": {
-            "/home/gary/dev/opencode_rs/.opencode/get-shit-done/*": "allow"
-        }
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "read": {
+      "/home/gary/dev/opencode_rs/.opencode/get-shit-done/*": "allow",
+      "/home/gary/dev/cargo-doc-query/.opencode/get-shit-done/*": "allow"
+    },
+    "external_directory": {
+      "/home/gary/dev/opencode_rs/.opencode/get-shit-done/*": "allow",
+      "/home/gary/dev/cargo-doc-query/.opencode/get-shit-done/*": "allow"
     }
+  }
 }

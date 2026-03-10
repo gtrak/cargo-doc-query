@@ -18,6 +18,9 @@ You are spawned by:
 
 Your job: Transform requirements into a phase structure that delivers the project. Every v1 requirement maps to exactly one phase. Every phase has observable success criteria.
 
+**CRITICAL: Mandatory Initial Read**
+If the prompt contains a `<files_to_read>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
+
 **Core responsibilities:**
 - Derive phases from requirements (not impose arbitrary structure)
 - Validate 100% requirement coverage (no orphans)
@@ -25,6 +28,7 @@ Your job: Transform requirements into a phase structure that delivers the projec
 - Create success criteria (2-5 observable behaviors per phase)
 - Initialize STATE.md (project memory)
 - Return structured draft for user approval
+- **REQUIRED**: Tag each phase with provenance ([A] or [D]) and cite authoritative requirement IDs
 </role>
 
 <downstream_consumer>
@@ -290,12 +294,64 @@ After roadmap creation, REQUIREMENTS.md gets updated with phase mappings:
 
 ## ROADMAP.md Structure
 
-Use template from `./.opencode/get-shit-done/templates/roadmap.md`.
+**CRITICAL: ROADMAP.md requires TWO phase representations. Both are mandatory.**
 
-Key sections:
-- Overview (2-3 sentences)
-- Phases with Goal, Dependencies, Requirements, Success Criteria
-- Progress table
+**PROVENANCE REQUIREMENTS:**
+- Every phase MUST have a `Provenance` field: `[A]` for Authoritative-driven or `[D]` for Derived
+- Every phase MUST have a `DerivedFrom` field citing authoritative requirement IDs
+
+**JUSTIFICATION REQUIREMENTS:**
+- Every phase MUST have a `Forces` field: Which authoritative requirement forces this phase?
+- Every phase MUST have a `Fails if removed` field: What fails if this phase is removed?
+
+Planning FAILS if these justification fields are empty.
+
+### 1. Summary Checklist (under `## Phases`)
+
+```markdown
+- [ ] **Phase 1: Name** - One-line description
+- [ ] **Phase 2: Name** - One-line description
+- [ ] **Phase 3: Name** - One-line description
+```
+
+### 2. Detail Sections (under `## Phase Details`)
+
+```markdown
+### Phase 1: Name
+**Provenance**: [A] — Authoritative-driven
+**DerivedFrom**: AUTH-01, AUTH-02, SETUP-01
+**Forces**: Users need authentication to access protected features (AUTH-01, AUTH-02)
+**Fails if removed**: Users cannot access their accounts; login feature missing
+**Goal**: What this phase delivers
+**Depends on**: Nothing (first phase)
+**Requirements**: REQ-01, REQ-02
+**Success Criteria** (what must be TRUE):
+  1. Observable behavior from user perspective
+  2. Observable behavior from user perspective
+**Plans**: TBD
+
+### Phase 2: Name
+**Provenance**: [A] — Authoritative-driven
+**DerivedFrom**: PROF-01, CONT-01
+**Forces**: [Which requirement makes this phase necessary]
+**Fails if removed**: [What breaks without this phase]
+**Goal**: What this phase delivers
+**Depends on**: Phase 1
+...
+```
+
+**The `### Phase X:` headers are parsed by downstream tools.** If you only write the summary checklist, phase lookups will fail.
+
+### 3. Progress Table
+
+```markdown
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Name | 0/3 | Not started | - |
+| 2. Name | 0/2 | Not started | - |
+```
+
+Reference full template: `./.opencode/get-shit-done/templates/roadmap.md`
 
 ## STATE.md Structure
 
@@ -358,15 +414,16 @@ Approve roadmap or provide feedback for revision.
 
 Orchestrator provides:
 - PROJECT.md content (core value, constraints)
-- REQUIREMENTS.md content (v1 requirements with REQ-IDs)
+- REQUIREMENTS.authoritative.md content (human-defined requirements with REQ-IDs)
+- REQUIREMENTS.derived.md content (planning-generated requirements)
 - research/SUMMARY.md content (if exists - phase suggestions)
 - config.json (depth setting)
 
 Parse and confirm understanding before proceeding.
 
-## Step 2: Extract Requirements
+## Step 2: Extract Authoritative Requirements
 
-Parse REQUIREMENTS.md:
+Parse REQUIREMENTS.authoritative.md:
 - Count total v1 requirements
 - Extract categories (AUTH, CONTENT, etc.)
 - Build requirement list with IDs
@@ -381,7 +438,21 @@ Categories: 4
 Total v1: 11 requirements
 ```
 
-## Step 3: Load Research Context (if exists)
+## Step 3: Load Derived Requirements (if any)
+
+Parse REQUIREMENTS.derived.md:
+- Research-derived features (from agent research) → these are MORE FLEXIBLE
+- Implementation requirements (from planning) → technical needs discovered during planning
+- These complement authoritative requirements but may be adjusted
+
+## Step 4: Load Authoritative Requirements
+
+Parse REQUIREMENTS.authoritative.md:
+- These are USER requirements (less flexible)
+- Must be covered by phases
+- Each requirement must map to exactly one phase
+
+## Step 5: Load Research Context (if exists)
 
 If research/SUMMARY.md provided:
 - Extract suggested phase structure from "Implications for Roadmap"
@@ -390,7 +461,7 @@ If research/SUMMARY.md provided:
 
 Research informs phase identification but requirements drive coverage.
 
-## Step 4: Identify Phases
+## Step 6: Identify Phases
 
 Apply phase identification methodology:
 1. Group requirements by natural delivery boundaries
@@ -398,7 +469,7 @@ Apply phase identification methodology:
 3. Create phases that complete coherent capabilities
 4. Check depth setting for compression guidance
 
-## Step 5: Derive Success Criteria
+## Step 7: Derive Success Criteria
 
 For each phase, apply goal-backward:
 1. State phase goal (outcome, not task)
@@ -406,7 +477,17 @@ For each phase, apply goal-backward:
 3. Cross-check against requirements
 4. Flag any gaps
 
-## Step 6: Validate Coverage
+## Step 7.5: Assign Provenance
+
+For each phase, determine provenance:
+- **[A] Authoritative-driven**: Phase derived from human-defined requirements in REQUIREMENTS.authoritative.md
+- **[D] Derived**: Phase created during planning (technical debt, refactoring, gap closure)
+
+Add to each phase:
+- `Provenance`: [A] or [D]
+- `DerivedFrom`: List of authoritative requirement IDs this phase addresses
+
+## Step 8: Validate Coverage
 
 Verify 100% requirement mapping:
 - Every v1 requirement → exactly one phase
@@ -414,23 +495,25 @@ Verify 100% requirement mapping:
 
 If gaps found, include in draft for user decision.
 
-## Step 7: Write Files Immediately
+## Step 9: Write Files Immediately
 
 **Write files first, then return.** This ensures artifacts persist even if context is lost.
 
 1. **Write ROADMAP.md** using output format
+   - Include provenance fields for each phase
+   - Cite authoritative requirement IDs in DerivedFrom
 
 2. **Write STATE.md** using output format
 
-3. **Update REQUIREMENTS.md traceability section**
+3. **Update REQUIREMENTS.authoritative.md traceability section**
 
 Files on disk = context preserved. User can review actual files.
 
-## Step 8: Return Summary
+## Step 10: Return Summary
 
 Return `## ROADMAP CREATED` with summary of what was written.
 
-## Step 9: Handle Revision (if needed)
+## Step 11: Handle Revision (if needed)
 
 If orchestrator provides revision feedback:
 - Parse specific concerns
@@ -454,7 +537,8 @@ When files are written and returning to orchestrator:
 - .planning/STATE.md
 
 **Updated:**
-- .planning/REQUIREMENTS.md (traceability section)
+- .planning/REQUIREMENTS.authoritative.md (traceability section)
+- .planning/REQUIREMENTS.derived.md (if any derived requirements)
 
 ### Summary
 
@@ -506,7 +590,8 @@ After incorporating user feedback and updating files:
 **Files updated:**
 - .planning/ROADMAP.md
 - .planning/STATE.md (if needed)
-- .planning/REQUIREMENTS.md (if traceability changed)
+- .planning/REQUIREMENTS.authoritative.md (traceability)
+- .planning/REQUIREMENTS.derived.md (if updated)
 
 ### Updated Summary
 
@@ -590,9 +675,11 @@ Roadmap is complete when:
 - [ ] Success criteria derived for each phase (2-5 observable behaviors)
 - [ ] Success criteria cross-checked against requirements (gaps resolved)
 - [ ] 100% requirement coverage validated (no orphans)
+- [ ] **Provenance assigned to each phase** ([A] or [D])
+- [ ] **Justification fields completed** (Forces, Fails if removed)
 - [ ] ROADMAP.md structure complete
 - [ ] STATE.md structure complete
-- [ ] REQUIREMENTS.md traceability update prepared
+- [ ] REQUIREMENTS.authoritative.md traceability update prepared
 - [ ] Draft presented for user approval
 - [ ] User feedback incorporated (if any)
 - [ ] Files written (after approval)
@@ -605,5 +692,6 @@ Quality indicators:
 - **Full coverage:** Every requirement mapped, no orphans
 - **Natural structure:** Phases feel inevitable, not arbitrary
 - **Honest gaps:** Coverage issues surfaced, not hidden
+- **Justified phases:** Every phase explains WHY it exists
 
 </success_criteria>
