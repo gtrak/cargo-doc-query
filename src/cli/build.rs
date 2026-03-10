@@ -74,9 +74,18 @@ impl BuildCommand {
         &self,
         _deps: &[(String, String, Utf8PathBuf)],
     ) -> Result<Vec<(String, String, PathBuf)>> {
+        // Get target triple from rustc
+        let target_triple = std::process::Command::new("rustc")
+            .args(["-vV"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.lines().find(|l| l.starts_with("host:")).map(|l| l[5..].trim().to_string()))
+            .unwrap_or_else(|| "x86_64-unknown-linux-gnu".to_string());
+
         let output_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
-            .join("target/doc");
+            .join(format!("target/{}/doc", target_triple));
 
         println!("Generating rustdoc JSON via cargo doc...");
 
@@ -483,5 +492,28 @@ mod tests {
             let normalized = package_name.replace("-", "_");
             assert_eq!(normalized, expected);
         }
+    }
+
+    #[test]
+    fn test_target_triple_detection() {
+        let output = std::process::Command::new("rustc")
+            .args(["-vV"])
+            .output()
+            .expect("rustc should be available");
+
+        let stdout = String::from_utf8(output.stdout).expect("valid UTF-8");
+        let host_line = stdout.lines().find(|l| l.starts_with("host:"));
+        assert!(host_line.is_some());
+        
+        let host = host_line.unwrap()[5..].trim();
+        assert!(!host.is_empty());
+        
+        let parts: Vec<&str> = host.split('-').collect();
+        assert!(parts.len() >= 3);
+        
+        let doc_path = format!("target/{}/doc", host);
+        assert!(doc_path.contains("target/"));
+        assert!(doc_path.contains("/doc"));
+        assert!(doc_path.ends_with("/doc"));
     }
 }
