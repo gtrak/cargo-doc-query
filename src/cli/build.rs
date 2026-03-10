@@ -68,38 +68,48 @@ impl BuildCommand {
         pb
     }
 
+    /// Target directory for cargo-doc-query documentation output
+    const TARGET_DIR: &str = "target/.cargo-doc-query";
+
+    /// Get the deterministic output directory for rustdoc JSON files
+    fn get_output_dir(&self) -> PathBuf {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(Self::TARGET_DIR)
+            .join("doc")
+    }
+
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
-    /// This generates JSON for the workspace, all dependencies, AND stdlib in one command
+    /// This generates JSON for external dependencies using -p flags
     fn generate_rustdoc_json(
         &self,
-        _deps: &[(String, String, Utf8PathBuf)],
+        deps: &[(String, String, Utf8PathBuf)],
     ) -> Result<Vec<(String, String, PathBuf)>> {
-        // Get target triple from rustc
-        let target_triple = std::process::Command::new("rustc")
-            .args(["-vV"])
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .and_then(|s| s.lines().find(|l| l.starts_with("host:")).map(|l| l[5..].trim().to_string()))
-            .unwrap_or_else(|| "x86_64-unknown-linux-gnu".to_string());
-
-        let output_dir = std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(format!("target/{}/doc", target_triple));
+        let output_dir = self.get_output_dir();
 
         println!("Generating rustdoc JSON via cargo doc...");
 
-        // Run cargo doc with JSON output flags
+        // Run cargo doc with JSON output flags, documenting only external dependencies
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("+nightly")
             .arg("doc")
-            .arg("--workspace")
             .arg("--all-features")
-            .arg("--message-format=json");
+            .arg("--no-deps"); // Don't document dependencies' dependencies
+
+        // Add -p flags for each external dependency
+        for (name, _version, _path) in deps {
+            cmd.arg("-p").arg(name);
+        }
 
         // Set RUSTDOCFLAGS for JSON output
         let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
         cmd.env("RUSTDOCFLAGS", rustdocflags);
+
+        // Set CARGO_TARGET_DIR for deterministic output location
+        let cargo_target_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(Self::TARGET_DIR);
+        cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
         // Run the command
         let output = cmd.output().context("Failed to run cargo doc")?;
@@ -158,6 +168,7 @@ impl BuildCommand {
 
         if json_files.is_empty() {
             // Fallback: scan the output directory directly
+            let output_dir = self.get_output_dir();
             return self.scan_json_files(&output_dir);
         }
 
@@ -504,13 +515,13 @@ mod tests {
         let stdout = String::from_utf8(output.stdout).expect("valid UTF-8");
         let host_line = stdout.lines().find(|l| l.starts_with("host:"));
         assert!(host_line.is_some());
-        
+
         let host = host_line.unwrap()[5..].trim();
         assert!(!host.is_empty());
-        
+
         let parts: Vec<&str> = host.split('-').collect();
         assert!(parts.len() >= 3);
-        
+
         let doc_path = format!("target/{}/doc", host);
         assert!(doc_path.contains("target/"));
         assert!(doc_path.contains("/doc"));
