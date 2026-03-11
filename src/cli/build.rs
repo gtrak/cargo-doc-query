@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
@@ -7,7 +6,6 @@ use std::time::Duration;
 
 use cargo_doc_query::cache::key::CacheKeyInputs;
 use cargo_doc_query::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
-use cargo_doc_query::parser::validate::validate_format_version;
 
 pub struct BuildCommand {
     manifest_path: PathBuf,
@@ -80,8 +78,9 @@ impl BuildCommand {
     }
 
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
-    /// This generates JSON for external dependencies using cargo doc
+    /// This generates JSON for all crates (workspace + dependencies) using cargo doc
     /// Works even when the workspace has compile errors because we scan the output directory
+    /// for any JSON files that were successfully generated
     fn generate_rustdoc_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
         println!("Generating rustdoc JSON via cargo doc...");
 
@@ -103,7 +102,13 @@ impl BuildCommand {
         cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
         // Run the command (may fail if workspace has compile errors)
-        let _output = cmd.output().context("Failed to run cargo doc")?;
+        let output = cmd.output().context("Failed to run cargo doc")?;
+
+        // Log cargo doc output if it failed
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!("cargo doc warning/error: {}", stderr);
+        }
 
         // Even if cargo doc fails, we can still collect the JSON files that were generated
         // for dependencies before the error occurred
@@ -111,7 +116,18 @@ impl BuildCommand {
         self.scan_json_files(&output_dir)
     }
 
-    /// Fallback: scan directory for JSON files
+    /// Extract version from a rustdoc JSON file
+    fn extract_version_from_json(&self, path: &Path) -> Result<String> {
+        let json_str = std::fs::read_to_string(path)?;
+        let json: serde_json::Value = serde_json::from_str(&json_str)?;
+        // The version is at the root level in the JSON
+        let version = json.get("version")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Version not found in JSON"))?;
+        Ok(version.to_string())
+    }
+
+    /// Fallback: scan directory for JSON files and extract version from each file
     fn scan_json_files(&self, dir: &Path) -> Result<Vec<(String, String, PathBuf)>> {
         let mut json_files = Vec::new();
 
@@ -133,7 +149,9 @@ impl BuildCommand {
                     let name = stem.to_string_lossy().to_string();
                     // Skip internal files
                     if !name.starts_with("rustdoc_") {
-                        json_files.push((name, "0.0.0".to_string(), path));
+                        let version = self.extract_version_from_json(&path)
+                            .unwrap_or_else(|_| "0.0.0".to_string());
+                        json_files.push((name, version, path));
                     }
                 }
             }
@@ -144,7 +162,6 @@ impl BuildCommand {
 
     fn generate_serializable_index(
         &self,
-        _deps: &[(String, String, Utf8PathBuf)],
         json_paths: &[(String, String, PathBuf)],
     ) -> SerializableIndex {
         let mut nodes = Vec::new();
@@ -216,16 +233,8 @@ impl BuildCommand {
         for (pkg_name, pkg_version, json_path) in &json_paths_refs {
             process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
 
-            let json_str = std::fs::read_to_string(json_path)
+            let _json_str = std::fs::read_to_string(json_path)
                 .with_context(|| format!("Failed to read {}", json_path.display()))?;
-
-            // Format version validation - warn but don't fail
-            // Note: We skip strict validation here because large JSON files can exceed
-            // serde_json's recursion limit during validation. The actual parsing with
-            // rustdoc_types will catch format mismatches later.
-            if let Err(_e) = validate_format_version(&json_str) {
-                // Silently continue - validation failed but we'll try to parse anyway
-            }
 
             ct += 1;
             process_pb.inc(1);
@@ -234,7 +243,7 @@ impl BuildCommand {
 
         // 8. Save to cache (CACHE-03)
         let save_spinner = self.create_spinner("Saving cache...");
-        let mut serializable = self.generate_serializable_index(&deps, &json_paths);
+        let mut serializable = self.generate_serializable_index(&json_paths);
         serializable.cache_key = cache_key.clone();
         cache_store.save(&cache_key, &serializable)?;
         save_spinner.finish_with_message("Cache saved");
@@ -282,7 +291,7 @@ mod tests {
         ];
 
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
-        let serializable = build_cmd.generate_serializable_index(&[], &json_paths);
+        let serializable = build_cmd.generate_serializable_index(&json_paths);
 
         assert_eq!(serializable.format_version, 1);
         assert_eq!(serializable.nodes.len(), 2);
@@ -309,7 +318,7 @@ mod tests {
         ];
 
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
-        let serializable = build_cmd.generate_serializable_index(&[], &json_paths);
+        let serializable = build_cmd.generate_serializable_index(&json_paths);
 
         assert_eq!(serializable.nodes.len(), 2);
         assert!(serializable.nodes[0].json_path.starts_with("/absolute"));
