@@ -8,8 +8,8 @@ edition = "2021"
 
 # rustdoc ecosystem dependencies
 rustdoc-types = "0.57"
-cargo_metadata = "0.19"
-petgraph = "0.7"
+cargo_metadata = "0.23"
+petgraph = "0.8"
 postcard = { version = "1.1", features = ["use-std"] }
 blake3 = "1.6"
 serde_json = "1.0"
@@ -18,14 +18,14 @@ serde_stacker = "0.1"
 # supporting dependencies
 camino = "1.1"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
 glob = "0.3.3"
 
 # UI dependencies
-indicatif = "0.17"
-console = "0.15"
+indicatif = "0.18"
+console = "0.16"
 
 # Signal handling
 ctrlc = "3.4"
@@ -33,7 +33,7 @@ tempfile = "3.25"
 
 # Benchmark dependencies
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 glob = "0.3.3"
 
 # Testing dependencies
