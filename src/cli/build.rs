@@ -80,26 +80,17 @@ impl BuildCommand {
     }
 
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
-    /// This generates JSON for external dependencies using -p flags
-    fn generate_rustdoc_json(
-        &self,
-        deps: &[(String, String, Utf8PathBuf)],
-    ) -> Result<Vec<(String, String, PathBuf)>> {
-        let output_dir = self.get_output_dir();
-
+    /// This generates JSON for external dependencies using cargo doc
+    /// Works even when the workspace has compile errors because we scan the output directory
+    fn generate_rustdoc_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
         println!("Generating rustdoc JSON via cargo doc...");
 
-        // Run cargo doc with JSON output flags, documenting only external dependencies
+        // Run cargo doc with JSON output flags
+        // We don't use --no-deps so that dependencies are also documented
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("+nightly")
             .arg("doc")
-            .arg("--all-features")
-            .arg("--no-deps"); // Don't document dependencies' dependencies
-
-        // Add -p flags for each external dependency
-        for (name, _version, _path) in deps {
-            cmd.arg("-p").arg(name);
-        }
+            .arg("--all-features");
 
         // Set RUSTDOCFLAGS for JSON output
         let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
@@ -111,69 +102,13 @@ impl BuildCommand {
             .join(Self::TARGET_DIR);
         cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
-        // Run the command
-        let output = cmd.output().context("Failed to run cargo doc")?;
+        // Run the command (may fail if workspace has compile errors)
+        let _output = cmd.output().context("Failed to run cargo doc")?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow::anyhow!("cargo doc failed: {}", stderr));
-        }
-
-        // Parse JSON messages to find generated artifacts
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut json_files = Vec::new();
-        let mut crate_names = std::collections::HashSet::new();
-
-        for line in stdout.lines() {
-            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(line) {
-                if let Some(reason) = msg.get("reason").and_then(|v| v.as_str()) {
-                    if reason == "compiler-artifact" {
-                        if let Some(filenames) = msg
-                            .get("target")
-                            .and_then(|t| t.get("filenames"))
-                            .and_then(|f| f.as_array())
-                        {
-                            for filename in filenames {
-                                if let Some(path) = filename.as_str() {
-                                    let path = PathBuf::from(path);
-                                    if path.extension().is_some_and(|ext| ext == "json") {
-                                        // Extract crate name from filename (e.g., "serde.json" -> "serde")
-                                        if let Some(stem) = path.file_stem() {
-                                            let name = stem.to_string_lossy().to_string();
-                                            // Skip internal rustdoc crates
-                                            if !name.starts_with("rustdoc_")
-                                                && !crate_names.contains(&name)
-                                            {
-                                                crate_names.insert(name.clone());
-
-                                                // Try to get version from package_id
-                                                let version = msg
-                                                    .get("package_id")
-                                                    .and_then(|p| p.as_str())
-                                                    .and_then(|p| p.split_whitespace().nth(1))
-                                                    .map(|v| v.to_string())
-                                                    .unwrap_or_else(|| "0.0.0".to_string());
-
-                                                json_files.push((name, version, path));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if json_files.is_empty() {
-            // Fallback: scan the output directory directly
-            let output_dir = self.get_output_dir();
-            return self.scan_json_files(&output_dir);
-        }
-
-        println!("Generated {} rustdoc JSON files", json_files.len());
-        Ok(json_files)
+        // Even if cargo doc fails, we can still collect the JSON files that were generated
+        // for dependencies before the error occurred
+        let output_dir = self.get_output_dir();
+        self.scan_json_files(&output_dir)
     }
 
     /// Fallback: scan directory for JSON files
@@ -271,7 +206,7 @@ impl BuildCommand {
         eprintln!("{}", style("Cache miss, building index...").yellow());
 
         // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
-        let json_paths = self.generate_rustdoc_json(&deps)?;
+        let json_paths = self.generate_rustdoc_json()?;
 
         // 5. Parse and validate all JSON files
         let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
