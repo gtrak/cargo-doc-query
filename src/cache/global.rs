@@ -25,7 +25,7 @@ impl CrateCacheKey {
             version: version.to_string(),
             rustc_version,
             target_triple,
-            features_hash: "all-features".to_string(),
+            features_hash: "default-features".to_string(),
         })
     }
 
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(key.version, "1.0.204");
         assert!(key.rustc_version.contains("rustc"));
         assert!(!key.target_triple.is_empty());
-        assert_eq!(key.features_hash, "all-features");
+        assert_eq!(key.features_hash, "default-features");
         
         Ok(())
     }
@@ -388,5 +388,32 @@ mod tests {
         assert!(stats.total_size_bytes > 0);
         
         Ok(())
+    }
+
+    #[test]
+    fn test_features_hash_is_default_features() -> Result<()> {
+        let key = CrateCacheKey::from_crate("serde", "1.0.204")?;
+        assert_eq!(key.features_hash, "default-features");
+        Ok(())
+    }
+
+    #[test]
+    fn test_env_hash_changes_with_features_hash() {
+        let key_all = CrateCacheKey {
+            name: "serde".to_string(),
+            version: "1.0.204".to_string(),
+            rustc_version: "rustc 1.80.0".to_string(),
+            target_triple: "x86_64-unknown-linux-gnu".to_string(),
+            features_hash: "all-features".to_string(),
+        };
+        let key_default = CrateCacheKey {
+            name: "serde".to_string(),
+            version: "1.0.204".to_string(),
+            rustc_version: "rustc 1.80.0".to_string(),
+            target_triple: "x86_64-unknown-linux-gnu".to_string(),
+            features_hash: "default-features".to_string(),
+        };
+        assert_ne!(key_all.env_hash(), key_default.env_hash(), 
+            "Different features_hash should produce different env_hash");
     }
 }

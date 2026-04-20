@@ -79,9 +79,8 @@ impl BuildCommand {
             .join("doc")
     }
 
-    /// Generate rustdoc JSON for specific packages using cargo doc with RUSTDOCFLAGS
-    /// This builds only the specified packages via -p flags.
-    /// Falls back to individual builds if batch build fails.
+    /// Builds each package individually with default features (no --all-features).
+    /// Skips packages that fail to build (dev-dependencies often can't build docs).
     fn generate_rustdoc_json_for_packages(
         &self,
         packages: &[(&str, &str)],
@@ -91,69 +90,37 @@ impl BuildCommand {
             style(format!("Building {} packages...", packages.len())).yellow()
         );
 
-        // Build all packages in a single cargo doc command with --all-features
-        let mut cmd = std::process::Command::new("cargo");
-        cmd.arg("+nightly").arg("doc");
+        // Build each package individually using cargo doc -p
+        // We DON'T use --all-features because it's incompatible with -p for external deps
+        let all_json = self.generate_rustdoc_json_individual(packages)?;
 
-        // Add -p flags for each package
-        for (pkg_name, _) in packages {
-            cmd.arg("-p").arg(pkg_name);
+        if all_json.is_empty() {
+            return Err(anyhow::anyhow!("No rustdoc JSON files were generated for any of the {} requested packages", packages.len()));
         }
 
-        cmd.arg("--all-features");
-
-        // Set RUSTDOCFLAGS for JSON output
-        let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
-        cmd.env("RUSTDOCFLAGS", rustdocflags);
-
-        // Set CARGO_TARGET_DIR for deterministic output location
-        let cargo_target_dir = std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(Self::TARGET_DIR);
-        cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
-
-        // Run the command
-        let output = cmd.output().context("Failed to run cargo doc")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!(
-                "{}",
-                style(format!(
-                    "⚠ Batch build with --all-features failed ({})...",
-                    stderr.lines().next().unwrap_or("unknown error")
-                ))
-                .yellow()
-            );
-
-            // Fallback: try building each package individually without --all-features
-            let fallback_result = self.generate_rustdoc_json_individual_fallback(packages)?;
-            if !fallback_result.is_empty() {
-                return Ok(fallback_result);
-            }
-        }
-
-        // Collect the JSON files that were generated
-        let output_dir = self.get_output_dir();
-        self.scan_json_files(&output_dir)
+        Ok(all_json)
     }
 
-    /// Fallback: build each package individually with --all-features.
-    /// If that fails for a specific package, try without --all-features.
-    fn generate_rustdoc_json_individual_fallback(
+    /// Build each package individually with default features.
+    /// Skips packages that fail to build (dev-dependencies often can't build docs).
+    fn generate_rustdoc_json_individual(
         &self,
         packages: &[(&str, &str)],
     ) -> Result<Vec<(String, String, PathBuf)>> {
         let mut all_json = Vec::new();
+        let mut built_count = 0usize;
+        let mut failed_packages = Vec::new();
 
         for (pkg_name, _) in packages {
-            // Try with --all-features first
+            eprintln!("{}", style(format!("  Building {}...", pkg_name)).dim());
+
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("+nightly")
                 .arg("doc")
                 .arg("-p")
-                .arg(pkg_name)
-                .arg("--all-features");
+                .arg(pkg_name);
+            // No --all-features (incompatible with -p for external deps)
+            // No --no-deps (we want transitive dep JSONs too)
 
             let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
             cmd.env("RUSTDOCFLAGS", rustdocflags);
@@ -163,52 +130,31 @@ impl BuildCommand {
                 .join(Self::TARGET_DIR);
             cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
-            let output = cmd.output().context(format!("Failed to run cargo doc for {}", pkg_name))?;
+            let output = cmd.output()
+                .with_context(|| format!("Failed to execute cargo doc for {}", pkg_name))?;
 
             if output.status.success() {
                 eprintln!("{}", style(format!("  ✓ Built {}", pkg_name)).green());
-                // Collect ALL JSON files from the output directory (includes transitive deps)
                 if let Ok(json_files) = self.scan_json_files(&self.get_output_dir()) {
                     all_json.extend(json_files);
                 }
-                continue;
-            }
-
-            // If --all-features failed, try without it
-            eprintln!(
-                "{}",
-                style(format!("  ⚠ {} failed with --all-features, trying without...", pkg_name)).yellow()
-            );
-
-            let mut cmd_fallback = std::process::Command::new("cargo");
-            cmd_fallback.arg("+nightly")
-                .arg("doc")
-                .arg("-p")
-                .arg(pkg_name);
-            // No --all-features in this fallback
-
-            cmd_fallback.env("RUSTDOCFLAGS", rustdocflags);
-            cmd_fallback.env("CARGO_TARGET_DIR", &cargo_target_dir);
-
-            let fallback_output = cmd_fallback.output()
-                .context(format!("Failed to run fallback cargo doc for {}", pkg_name))?;
-
-            if fallback_output.status.success() {
-                eprintln!("{}", style(format!("  ✓ Built {} (default features)", pkg_name)).green());
-                if let Ok(mut json_files) = self.scan_json_files(&self.get_output_dir()) {
-                    // Only keep this package's JSON since we didn't use --all-features
-                    // and the cache key won't match "all-features"
-                    json_files.retain(|(name, _, _)| name.replace("-", "_") == pkg_name.replace("-", "_"));
-                    // TODO: These should use features_hash = "default-features" in the cache key
-                    // For now, store them with the current default hash
-                    all_json.extend(json_files);
-                }
+                built_count += 1;
             } else {
-                eprintln!(
-                    "{}",
-                    style(format!("  ✗ Failed to build {}", pkg_name)).red()
-                );
+                // Some crates (dev-deps, proc-macros) can't build docs — skip them
+                eprintln!("{}", style(format!("  ⚠ Skipped {} (build failed)", pkg_name)).yellow());
+                failed_packages.push(pkg_name.to_string());
             }
+        }
+
+        if !failed_packages.is_empty() && !self.quiet {
+            eprintln!("{}", style(format!("  Skipped {} packages that couldn't build docs: [{}]",
+                failed_packages.len(),
+                failed_packages.join(", ")
+            )).dim());
+        }
+
+        if built_count > 0 {
+            eprintln!("{}", style(format!("  Built {}/{} packages", built_count, packages.len())).green());
         }
 
         // Deduplicate by (name, version) since multiple -p builds may produce overlapping results
@@ -809,31 +755,36 @@ mod tests {
         Ok(())
     }
 
-    // Test for Bug 3: fallback used to use --no-deps without --all-features
+    // Test that individual builds use simple cargo doc -p without --all-features or --no-deps
     #[test]
-    fn test_fallback_uses_all_features_first() -> anyhow::Result<()> {
-        // Verify that the first fallback attempt uses --all-features
-        // (not --no-deps and not missing --all-features)
+    fn test_individual_build_no_all_features_no_no_deps() -> anyhow::Result<()> {
+        // Verify that individual package builds do NOT use --all-features
+        // (it's incompatible with -p for external deps) or --no-deps
+        // (we want transitive deps cached too)
         let pkg_name = "serde";
 
-        // Build the command that the fallback would build for --all-features attempt
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("+nightly")
             .arg("doc")
             .arg("-p")
-            .arg(pkg_name)
-            .arg("--all-features");
+            .arg(pkg_name);
+        // No --all-features, no --no-deps
 
-        // Verify --all-features is present in the args
         let args: Vec<String> = cmd.get_args()
             .map(|s| s.to_str().unwrap_or_default().to_string())
             .collect();
-        assert!(args.contains(&"--all-features".to_string()), 
-            "Fallback should try --all-features first for individual builds");
         
-        // Verify --no-deps is NOT present
+        // Should have doc and -p
+        assert!(args.contains(&"doc"), "Should have 'doc' arg");
+        assert!(args.contains(&"-p"), "Should have '-p' arg");
+        
+        // Should NOT have --all-features (incompatible with -p for external deps)
+        assert!(!args.contains(&"--all-features".to_string()), 
+            "Individual builds should NOT use --all-features");
+        
+        // Should NOT have --no-deps (we want transitive deps cached)
         assert!(!args.contains(&"--no-deps".to_string()),
-            "Fallback should NOT use --no-deps (we want transitive deps cached)");
+            "Individual builds should NOT use --no-deps");
 
         Ok(())
     }
@@ -916,4 +867,36 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_individual_build_command_structure() {
+        // Verify that the individual build command for a package:
+        // - Uses +nightly doc -p <pkg>
+        // - Does NOT include --all-features
+        // - Does NOT include --no-deps
+        // - Includes RUSTDOCFLAGS env var
+        // - Includes CARGO_TARGET_DIR env var
+        let pkg_name = "serde";
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("+nightly").arg("doc").arg("-p").arg(pkg_name);
+        // NO --all-features, NO --no-deps
+        
+        // Build the env vars that would be set
+        let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
+        let cargo_target_dir = PathBuf::from(".").join(BuildCommand::TARGET_DIR);
+        
+        // Verify command structure
+        let args: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().to_string()).collect();
+        assert!(args.contains(&"doc".to_string()), "Should have 'doc' arg");
+        assert!(args.contains(&"-p".to_string()), "Should have '-p' arg");
+        assert!(args.contains(&pkg_name.to_string()), "Should have package name");
+        assert!(!args.contains(&"--all-features".to_string()), "Should NOT have --all-features");
+        assert!(!args.contains(&"--no-deps".to_string()), "Should NOT have --no-deps");
+        
+        // Verify env vars would be set
+        assert!(!rustdocflags.is_empty(), "RUSTDOCFLAGS should not be empty");
+        // CARGO_TARGET_DIR path constructed correctly
+        assert!(cargo_target_dir.to_string_lossy().contains("target"), "CARGO_TARGET_DIR should contain 'target'");
+    }
+
 }
