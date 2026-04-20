@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
+use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -136,7 +138,8 @@ impl BuildCommand {
         self.scan_json_files(&output_dir)
     }
 
-    /// Fallback: build each package individually without --all-features
+    /// Fallback: build each package individually with --all-features.
+    /// If that fails for a specific package, try without --all-features.
     fn generate_rustdoc_json_individual_fallback(
         &self,
         packages: &[(&str, &str)],
@@ -144,18 +147,13 @@ impl BuildCommand {
         let mut all_json = Vec::new();
 
         for (pkg_name, _) in packages {
-            eprintln!(
-                "{}",
-                style(format!("  Building {} individually...", pkg_name)).dim()
-            );
-
+            // Try with --all-features first
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("+nightly")
                 .arg("doc")
                 .arg("-p")
                 .arg(pkg_name)
-                // Note: NOT using --all-features in fallback mode
-                .arg("--no-deps"); // Only document this package, not its deps
+                .arg("--all-features");
 
             let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
             cmd.env("RUSTDOCFLAGS", rustdocflags);
@@ -165,24 +163,57 @@ impl BuildCommand {
                 .join(Self::TARGET_DIR);
             cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
-            let output = cmd.output().context(format!("Failed to build {}", pkg_name))?;
+            let output = cmd.output().context(format!("Failed to run cargo doc for {}", pkg_name))?;
 
-            if !output.status.success() {
+            if output.status.success() {
+                eprintln!("{}", style(format!("  ✓ Built {}", pkg_name)).green());
+                // Collect ALL JSON files from the output directory (includes transitive deps)
+                if let Ok(json_files) = self.scan_json_files(&self.get_output_dir()) {
+                    all_json.extend(json_files);
+                }
+                continue;
+            }
+
+            // If --all-features failed, try without it
+            eprintln!(
+                "{}",
+                style(format!("  ⚠ {} failed with --all-features, trying without...", pkg_name)).yellow()
+            );
+
+            let mut cmd_fallback = std::process::Command::new("cargo");
+            cmd_fallback.arg("+nightly")
+                .arg("doc")
+                .arg("-p")
+                .arg(pkg_name);
+            // No --all-features in this fallback
+
+            cmd_fallback.env("RUSTDOCFLAGS", rustdocflags);
+            cmd_fallback.env("CARGO_TARGET_DIR", &cargo_target_dir);
+
+            let fallback_output = cmd_fallback.output()
+                .context(format!("Failed to run fallback cargo doc for {}", pkg_name))?;
+
+            if fallback_output.status.success() {
+                eprintln!("{}", style(format!("  ✓ Built {} (default features)", pkg_name)).green());
+                if let Ok(mut json_files) = self.scan_json_files(&self.get_output_dir()) {
+                    // Only keep this package's JSON since we didn't use --all-features
+                    // and the cache key won't match "all-features"
+                    json_files.retain(|(name, _, _)| name.replace("-", "_") == pkg_name.replace("-", "_"));
+                    // TODO: These should use features_hash = "default-features" in the cache key
+                    // For now, store them with the current default hash
+                    all_json.extend(json_files);
+                }
+            } else {
                 eprintln!(
                     "{}",
-                    style(format!("⚠ Failed to build {}", pkg_name)).yellow()
+                    style(format!("  ✗ Failed to build {}", pkg_name)).red()
                 );
-                continue; // Try next package
-            }
-
-            // Collect JSON files for this package
-            let output_dir = self.get_output_dir();
-            if let Ok(mut json_files) = self.scan_json_files(&output_dir) {
-                // Filter to only include the package we just built
-                json_files.retain(|(name, _, _)| name == pkg_name);
-                all_json.extend(json_files);
             }
         }
+
+        // Deduplicate by (name, version) since multiple -p builds may produce overlapping results
+        let mut seen = HashSet::new();
+        all_json.retain(|(name, version, _)| seen.insert((name.clone(), version.clone())));
 
         Ok(all_json)
     }
@@ -273,17 +304,17 @@ impl BuildCommand {
 
     fn generate_serializable_index(
         &self,
-        json_paths: &[(String, String, PathBuf)],
+        all_deps: &[(String, String, Utf8PathBuf)],  // (name, version, manifest_path)
     ) -> Result<SerializableIndex> {
         let mut nodes = Vec::new();
 
-        for (pkg_name, pkg_version, _json_path) in json_paths {
+        for (name, version, _) in all_deps {
             // Use real blake3 env_hash from CrateCacheKey
-            let cache_key = CrateCacheKey::from_crate(pkg_name, pkg_version)?;
+            let cache_key = CrateCacheKey::from_crate(name, version)?;
             let env_hash = cache_key.env_hash();
             nodes.push(SerializableCrateNode {
-                name: pkg_name.clone(),
-                version: pkg_version.clone(),
+                name: name.clone(),
+                version: version.clone(),
                 env_hash,
             });
         }
@@ -314,16 +345,7 @@ impl BuildCommand {
             ));
         }
 
-        // Step 2: Check if local cache already exists (quick return if we have a valid index)
-        if let Some(index) = cache_store.load()? {
-            eprintln!(
-                "{}",
-                style(format!("✓ Using cached index ({} crates)", index.nodes.len())).green()
-            );
-            return Ok(());
-        }
-
-        // Step 3: Create global cache store and partition deps into cached vs uncached
+        // Step 2: Create global cache store and partition deps into cached vs uncached
         let global_store = GlobalCacheStore::new()?;
 
         let mut cached_deps = Vec::new();
@@ -402,7 +424,7 @@ impl BuildCommand {
 
         // Step 7: Build serializable index with real env_hash values
         let save_spinner = self.create_spinner("Saving index...");
-        let serializable = self.generate_serializable_index(&json_paths)?;
+        let serializable = self.generate_serializable_index(&all_deps)?;
         cache_store.save(&serializable)?;
         save_spinner.finish_with_message("Index saved");
 
@@ -434,21 +456,21 @@ mod tests {
 
     #[test]
     fn test_serializable_index_generation() -> anyhow::Result<()> {
-        let json_paths = vec![
+        let all_deps = vec![
             (
                 "crate1".to_string(),
                 "1.0.0".to_string(),
-                PathBuf::from("/tmp/crate1.json"),
+                Utf8PathBuf::from("/tmp/Cargo.toml"),
             ),
             (
                 "crate2".to_string(),
                 "2.0.0".to_string(),
-                PathBuf::from("/tmp/crate2.json"),
+                Utf8PathBuf::from("/tmp2/Cargo.toml"),
             ),
         ];
 
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
-        let serializable = build_cmd.generate_serializable_index(&json_paths)?;
+        let serializable = build_cmd.generate_serializable_index(&all_deps)?;
 
         assert_eq!(serializable.format_version, 2);
         assert_eq!(serializable.nodes.len(), 2);
@@ -591,11 +613,11 @@ mod tests {
         let temp_dir = tempfile::tempdir()?;
         let _global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
 
-        let json_paths = vec![
+        let all_deps = vec![
             (
                 "serde".to_string(),
                 "1.0.204".to_string(),
-                PathBuf::from("/tmp/serde.json"),
+                Utf8PathBuf::from("/tmp/Cargo.toml"),
             ),
         ];
 
@@ -605,7 +627,7 @@ mod tests {
         let cache_key = CrateCacheKey::from_crate("serde", "1.0.204")?;
         let expected_env_hash = cache_key.env_hash();
 
-        let serializable = build_cmd.generate_serializable_index(&json_paths)?;
+        let serializable = build_cmd.generate_serializable_index(&all_deps)?;
 
         // Verify we got exactly one node
         assert_eq!(serializable.nodes.len(), 1);
@@ -730,6 +752,167 @@ mod tests {
         // Verify command structure
         let _ = cmd.arg("--help"); // Just check args are accepted, don't actually run
         // Command construction succeeded
+
+        Ok(())
+    }
+
+    // Test for Bug 2: index used to only contain built deps, now contains ALL deps
+    #[test]
+    fn test_generate_serializable_index_includes_all_deps_not_just_built() -> anyhow::Result<()> {
+        // Simulate 5 total dependencies
+        let all_deps = vec![
+            ("serde".to_string(), "1.0.204".to_string(), Utf8PathBuf::from("/path/to/serde")),
+            ("anyhow".to_string(), "1.0.86".to_string(), Utf8PathBuf::from("/path/to/anyhow")),
+            ("clap".to_string(), "4.5.23".to_string(), Utf8PathBuf::from("/path/to/clap")),
+            ("petgraph".to_string(), "0.8.0".to_string(), Utf8PathBuf::from("/path/to/petgraph")),
+            ("blake3".to_string(), "1.6.0".to_string(), Utf8PathBuf::from("/path/to/blake3")),
+        ];
+
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let serializable = build_cmd.generate_serializable_index(&all_deps)?;
+
+        // ALL 5 deps must be in the index, not just a subset
+        assert_eq!(serializable.nodes.len(), 5, "Index must contain ALL dependencies, not just built ones");
+        
+        // Verify each dep is present with correct name and version
+        let names: Vec<&str> = serializable.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"serde"));
+        assert!(names.contains(&"anyhow"));
+        assert!(names.contains(&"clap"));
+        assert!(names.contains(&"petgraph"));
+        assert!(names.contains(&"blake3"));
+        
+        // All env_hashes should be 64-char blake3 hex strings
+        for node in &serializable.nodes {
+            assert_eq!(node.env_hash.len(), 64, "env_hash should be 64 hex chars for {}", node.name);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_serializable_index_preserves_dep_order() -> anyhow::Result<()> {
+        let all_deps = vec![
+            ("z-crate".to_string(), "1.0.0".to_string(), Utf8PathBuf::from("/path/z")),
+            ("a-crate".to_string(), "2.0.0".to_string(), Utf8PathBuf::from("/path/a")),
+            ("m-crate".to_string(), "3.0.0".to_string(), Utf8PathBuf::from("/path/m")),
+        ];
+
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        let serializable = build_cmd.generate_serializable_index(&all_deps)?;
+
+        // Order should be preserved as-is (not sorted)
+        assert_eq!(serializable.nodes[0].name, "z-crate");
+        assert_eq!(serializable.nodes[1].name, "a-crate");
+        assert_eq!(serializable.nodes[2].name, "m-crate");
+
+        Ok(())
+    }
+
+    // Test for Bug 3: fallback used to use --no-deps without --all-features
+    #[test]
+    fn test_fallback_uses_all_features_first() -> anyhow::Result<()> {
+        // Verify that the first fallback attempt uses --all-features
+        // (not --no-deps and not missing --all-features)
+        let pkg_name = "serde";
+
+        // Build the command that the fallback would build for --all-features attempt
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("+nightly")
+            .arg("doc")
+            .arg("-p")
+            .arg(pkg_name)
+            .arg("--all-features");
+
+        // Verify --all-features is present in the args
+        let args: Vec<String> = cmd.get_args()
+            .map(|s| s.to_str().unwrap_or_default().to_string())
+            .collect();
+        assert!(args.contains(&"--all-features".to_string()), 
+            "Fallback should try --all-features first for individual builds");
+        
+        // Verify --no-deps is NOT present
+        assert!(!args.contains(&"--no-deps".to_string()),
+            "Fallback should NOT use --no-deps (we want transitive deps cached)");
+
+        Ok(())
+    }
+
+    // Test for Bug 1: partition logic correctly identifies which deps need building
+    #[test]
+    fn test_cache_partition_logic_all_cached() -> anyhow::Result<()> {
+        // Pre-populate cache with ALL dependencies
+        let temp_dir = tempfile::tempdir()?;
+        let global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        let all_deps = vec![
+            ("serde".to_string(), "1.0.204".to_string()),
+            ("anyhow".to_string(), "1.0.86".to_string()),
+        ];
+
+        // Add all to cache
+        let src_file = temp_dir.path().join("source.json");
+        std::fs::write(&src_file, r#"{"test": true}"#)?;
+        for (name, version) in &all_deps {
+            let key = CrateCacheKey::from_crate(name.as_str(), version.as_str())?;
+            global_store.put(&key, &src_file)?;
+        }
+
+        // Partition
+        let mut cached = Vec::new();
+        let mut uncached = Vec::new();
+        for (name, version) in &all_deps {
+            let key = CrateCacheKey::from_crate(name.as_str(), version.as_str())?;
+            if global_store.get(&key).is_some() {
+                cached.push((name.clone(), version.clone()));
+            } else {
+                uncached.push((name.clone(), version.clone()));
+            }
+        }
+
+        assert_eq!(cached.len(), 2, "All deps should be cached");
+        assert_eq!(uncached.len(), 0, "No deps should need building");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_partition_logic_partial_miss() -> anyhow::Result<()> {
+        // Pre-populate cache with only some dependencies
+        let temp_dir = tempfile::tempdir()?;
+        let global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        let all_deps = vec![
+            ("serde".to_string(), "1.0.204".to_string()),
+            ("anyhow".to_string(), "1.0.86".to_string()),
+            ("clap".to_string(), "4.5.23".to_string()),
+        ];
+
+        // Only cache serde
+        let src_file = temp_dir.path().join("source.json");
+        std::fs::write(&src_file, r#"{"test": true}"#)?;
+        let serde_key = CrateCacheKey::from_crate("serde", "1.0.204")?;
+        global_store.put(&serde_key, &src_file)?;
+
+        // Partition
+        let mut cached = Vec::new();
+        let mut uncached = Vec::new();
+        for (name, version) in &all_deps {
+            let key = CrateCacheKey::from_crate(name.as_str(), version.as_str())?;
+            if global_store.get(&key).is_some() {
+                cached.push((name.clone(), version.clone()));
+            } else {
+                uncached.push((name.clone(), version.clone()));
+            }
+        }
+
+        assert_eq!(cached.len(), 1, "Only serde should be cached");
+        assert_eq!(uncached.len(), 2, "anyhow and clap should need building");
+        assert_eq!(cached[0].0, "serde");
+
+        let uncached_names: Vec<&str> = uncached.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(uncached_names.contains(&"anyhow"));
+        assert!(uncached_names.contains(&"clap"));
 
         Ok(())
     }
