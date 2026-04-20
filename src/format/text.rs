@@ -513,11 +513,11 @@ pub fn format_expand_result_with_formatter(
                     items: node
                         .items
                         .iter()
-                        .map(|mi| crate::format::item::NestedItemInfo {
-                            name: mi.name.clone(),
-                            kind: mi.kind.clone(),
-                            path: mi.path.clone(),
-                        })
+                        .map(|mi| crate::types::ModuleItem::new(
+                            mi.name.clone(),
+                            mi.kind.clone(),
+                            mi.path.clone(),
+                        ))
                         .collect(),
                     is_deprecated: node.is_deprecated.unwrap_or(false),
                     deprecation_note: node.deprecation_note.clone(),

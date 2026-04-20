@@ -24,87 +24,34 @@ fn is_cache_available(output: &str) -> bool {
         && !output.contains("not found")
 }
 
-mod serde_tests {
+mod crate_query_tests {
     use super::*;
 
-    /// Test serde basic query
-    #[test]
-    fn test_serde_basic_query() {
-        let output = run_query(&["query", "serde", "--quiet"]);
-        if !is_cache_available(&output) {
-            eprintln!("Skipping: cache not available");
-            return;
-        }
+    /// Parameterized crate query test helper
+    fn assert_crate_query(name: &str, query_arg: &str, extra_args: &[&str], expected: &str, alt: Option<&str>) {
+        let args: Vec<_> = ["query", query_arg].iter().chain(extra_args.iter()).chain(&["--quiet"]).cloned().collect();
+        let output = run_query(&args);
+        
+        if !is_cache_available(&output) { eprintln!("Skipping {}: cache not available", name); return; }
 
-        // Should contain serde information
-        assert!(output.contains("serde"), "Expected 'serde' in output");
+        assert!(output.contains(expected) || alt.map_or(false, |e| output.contains(e)),
+                "Expected '{}' or '{}' in output for {}", expected, alt.unwrap_or(""), name);
     }
 
-    /// Test serde with depth
-    #[test]
-    fn test_serde_with_depth() {
-        let output = run_query(&["query", "serde", "--depth", "1", "--quiet"]);
-        if !is_cache_available(&output) {
-            eprintln!("Skipping: cache not available");
-            return;
-        }
-
-        // Should contain serde
-        assert!(output.contains("serde"), "Expected 'serde' in output");
+    #[test] fn test_serde_with_depth() {
+        assert_crate_query("serde_with_depth", "serde", &["--depth", "1"], "serde", None);
     }
-}
 
-mod anyhow_tests {
-    use super::*;
-
-    /// Test anyhow::Error query
-    #[test]
-    fn test_anyhow_error_query() {
-        let output = run_query(&["query", "anyhow::Error", "--quiet"]);
-        if !is_cache_available(&output) {
-            eprintln!("Skipping: cache not available");
-            return;
-        }
-
-        // Should contain Error information
-        assert!(
-            output.contains("Error") || output.contains("error"),
-            "Expected 'Error' in output"
-        );
+    #[test] fn test_anyhow_error_query() {
+        assert_crate_query("anyhow_error", "anyhow::Error", &[], "anyhow::Error", Some("Error"));
     }
-}
 
-mod clap_tests {
-    use super::*;
-
-    /// Test clap query
-    #[test]
-    fn test_clap_basic_query() {
-        let output = run_query(&["query", "clap", "--quiet"]);
-        if !is_cache_available(&output) {
-            eprintln!("Skipping: cache not available");
-            return;
-        }
-
-        // Should contain clap
-        assert!(output.contains("clap"), "Expected 'clap' in output");
+    #[test] fn test_clap_basic_query() {
+        assert_crate_query("clap_basic", "clap", &[], "clap", None);
     }
-}
 
-mod glob_tests {
-    use super::*;
-
-    /// Test glob query
-    #[test]
-    fn test_glob_query() {
-        let output = run_query(&["query", "glob", "--quiet"]);
-        if !is_cache_available(&output) {
-            eprintln!("Skipping: cache not available");
-            return;
-        }
-
-        // Should contain glob
-        assert!(output.contains("glob"), "Expected 'glob' in output");
+    #[test] fn test_glob_query() {
+        assert_crate_query("glob_query", "glob", &[], "glob", None);
     }
 }
 

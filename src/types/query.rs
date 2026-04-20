@@ -91,15 +91,11 @@ pub struct ModuleResult {
     pub submodules: Vec<String>,
 }
 
-/// Item within a module
-#[derive(Serialize, Debug, Clone)]
-pub struct ModuleItem {
-    pub name: String,
-    pub kind: String, // "struct", "enum", "trait", "function", "type", etc.
-    pub path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>, // For functions
-}
+/// Re-export the shared ModuleItem type from types module.
+/// 
+/// This is an alias for `crate::types::ModuleItem` to maintain backward
+/// compatibility with existing code in query module.
+pub use crate::types::ModuleItem;
 
 /// Method output for queries
 #[derive(Serialize, Debug, Clone)]
@@ -481,34 +477,6 @@ impl ModuleResult {
         Self {
             items: self.items.iter().map(|i| i.to_minimal()).collect(),
             submodules: self.submodules.clone(),
-        }
-    }
-}
-
-impl ModuleItem {
-    /// Create a new module item
-    pub fn new(name: String, kind: String, path: String) -> Self {
-        Self {
-            name,
-            kind,
-            path,
-            signature: None,
-        }
-    }
-
-    /// Set the signature (for functions)
-    pub fn with_signature(mut self, signature: String) -> Self {
-        self.signature = Some(signature);
-        self
-    }
-
-    /// Convert to minimal representation
-    pub fn to_minimal(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            kind: self.kind.clone(),
-            path: self.path.clone(),
-            signature: None, // Omit signatures in minimal mode
         }
     }
 }

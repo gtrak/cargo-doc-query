@@ -50,14 +50,6 @@ pub enum AppError {
 impl AppError {
     /// Get the appropriate exit code for this error
     pub fn exit_code(&self) -> ExitCode {
-        match self {
-            AppError::NoCache => ExitCode::from(1),
-            AppError::NotFound(_) => ExitCode::from(1),
-            AppError::BuildFailed(_) => ExitCode::from(1),
-            AppError::Io(_) => ExitCode::from(1),
-            AppError::Json(_) => ExitCode::from(1),
-            AppError::Config(_) => ExitCode::from(1),
-            AppError::Other(_) => ExitCode::from(1),
-        }
+        ExitCode::from(1)
     }
 }

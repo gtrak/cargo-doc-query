@@ -13,11 +13,11 @@ use crate::types::detail::{
 /// Helper function to create empty NestedItemInfo entries
 fn create_empty_nested_items(count: usize) -> Vec<NestedItemInfo> {
     (0..count)
-        .map(|_| NestedItemInfo {
-            name: String::new(),
-            kind: String::new(),
-            path: String::new(),
-        })
+        .map(|_| crate::types::ModuleItem::new(
+            String::new(),
+            String::new(),
+            String::new(),
+        ))
         .collect()
 }
 
@@ -193,13 +193,11 @@ pub struct VariantInfo {
     pub fields: Vec<FieldInfo>,
 }
 
-/// Nested item info (for modules, impls, traits)
-#[derive(Debug, Clone)]
-pub struct NestedItemInfo {
-    pub name: String,
-    pub kind: String,
-    pub path: String,
-}
+/// Re-export the shared ModuleItem type as NestedItemInfo for backward compatibility.
+/// 
+/// This is an alias for `crate::types::ModuleItem` to maintain compatibility
+/// with existing code in format module that references NestedItemInfo.
+pub use crate::types::ModuleItem as NestedItemInfo;
 
 /// Function modifiers
 #[derive(Debug, Clone)]

@@ -1,12 +1,11 @@
 // Recursive type expansion with cycle detection and token budgeting
 
 use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use crate::cache::store::SerializableIndex;
-use crate::parser::serde_helper::deserialize_with_stack;
+use crate::query::loader::CrateLoader;
 use crate::query::lookup::PathResolver;
 use crate::types::detail::DetailLevel;
 use crate::types::detail::{
@@ -72,52 +71,10 @@ impl TypeExpander {
         }
     }
 
-/// Load a crate's rustdoc JSON into memory.
-/// Returns Ok(true) if loaded or already present, Ok(false) if not in global cache.
+      /// Load a crate's rustdoc JSON into memory.
+    /// Returns Ok(true) if loaded or already present, Ok(false) if not in global cache.
     fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<bool> {
-        use std::fs;
-
-        let key = format!("{}::{}", crate_name, crate_version);
-        if self.crates.contains_key(&key) {
-            return Ok(true);
-        }
-
-        // Verify the crate exists in index (for error messages)
-        let _crate_node = self
-            .index
-            .nodes
-            .iter()
-            .find(|n| n.name == crate_name && n.version == crate_version)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
-            })?;
-
-        // Resolve JSON path via global cache
-        let cache_key = crate::cache::global::CrateCacheKey::from_crate(crate_name, crate_version)?;
-        let global_store = crate::cache::global::GlobalCacheStore::new()?;
-        let json_path = match global_store.get(&cache_key) {
-            Some(path) => path,
-            None => return Ok(false), // Not cached, skip gracefully
-        };
-
-        let json_str = fs::read_to_string(&json_path).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to read rustdoc JSON from {}: {}",
-                json_path.display(),
-                e
-            )
-        })?;
-
-        let krate: Crate = deserialize_with_stack(&json_str).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to parse rustdoc JSON from {}: {}",
-                json_path.display(),
-                e
-            )
-        })?;
-
-        self.crates.insert(key, krate);
-        Ok(true)
+        CrateLoader::new(&mut self.crates).load_crate(&self.index, crate_name, crate_version).map_err(Into::into)
     }
 
     /// Check if adding more tokens would exceed budget

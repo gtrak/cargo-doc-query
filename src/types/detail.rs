@@ -37,40 +37,29 @@ impl DetailLevel {
         }
     }
 
-    /// Check if this is Minimal detail level
-    pub fn is_minimal(self) -> bool {
-        matches!(self, Self::Minimal)
-    }
+    // Macro-generated check methods for DetailLevel
+}
 
-    /// Check if this is Detailed detail level
-    pub fn is_detailed(self) -> bool {
-        matches!(self, Self::Detailed)
-    }
+/// Generate check methods for DetailLevel enum using raw token stream
+macro_rules! detail_level_checks {
+    ($($name:ident => $v1:ident $(| $v2:ident)?)+) => {
+        impl DetailLevel {
+            $(pub fn $name(self) -> bool { matches!(self, Self::$v1 $(| Self::$v2)?) })*
+        }
+    };
+}
 
-    /// Check if this level should include visibility
-    pub fn includes_visibility(self) -> bool {
-        matches!(self, Self::Standard | Self::Detailed)
-    }
+detail_level_checks! {
+    is_minimal => Minimal
+    is_detailed => Detailed
+    includes_visibility => Standard | Detailed
+    includes_generics => Standard | Detailed
+    includes_attributes => Detailed
+    includes_deprecation => Detailed
+    includes_function_modifiers => Detailed
+}
 
-    /// Check if this level should include generics
-    pub fn includes_generics(self) -> bool {
-        matches!(self, Self::Standard | Self::Detailed)
-    }
-
-    /// Check if this level should include attributes
-    pub fn includes_attributes(self) -> bool {
-        matches!(self, Self::Detailed)
-    }
-
-    /// Check if this level should include deprecation
-    pub fn includes_deprecation(self) -> bool {
-        matches!(self, Self::Detailed)
-    }
-
-    /// Check if this level should include function modifiers
-    pub fn includes_function_modifiers(self) -> bool {
-        matches!(self, Self::Detailed)
-    }
+impl DetailLevel {
 }
 
 

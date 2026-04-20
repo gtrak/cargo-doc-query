@@ -69,58 +69,48 @@ fn test_filters_detailed_mode() {
     );
 }
 
-/// Test JSON output format
-#[test]
-fn test_json_output_format() {
-    let output = run_doc_query(&["Vec", "--json"]);
-
+/// Helper: validates JSON output from doc-query
+fn validate_json_output(args: &[&str], context: &str, deep_validate: bool) {
+    let output = run_doc_query(args);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     if output.status.success() && !stdout.trim().is_empty() {
-        // Verify it's valid JSON structure
         let trimmed = stdout.trim();
+        // Assert 1: JSON structure starts with array or object
         assert!(
             trimmed.starts_with('[') || trimmed.starts_with('{'),
-            "JSON output should start with [ or {{: got {}",
+            "JSON {} should start with [ or {{: got {}",
+            context,
             &trimmed[..trimmed.len().min(50)]
         );
+        // Assert 2 (optional): deep validation parses valid JSON
+        if deep_validate {
+            assert!(
+                serde_json::from_str::<serde_json::Value>(trimmed).is_ok(),
+                "JSON {} should be parseable: got {}",
+                context,
+                &trimmed[..trimmed.len().min(50)]
+            );
+        }
     }
+}
+
+/// Test JSON output format
+#[test]
+fn test_json_output_format() {
+    validate_json_output(&["Vec", "--json"], "basic format", false);
 }
 
 /// Test JSON output with filters
 #[test]
 fn test_json_with_filters() {
-    let output = run_doc_query(&["Vec", "--include", "std::*", "--json"]);
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if output.status.success() && !stdout.trim().is_empty() {
-        // Should be valid JSON if present
-        let trimmed = stdout.trim();
-        assert!(
-            trimmed.starts_with('[') || trimmed.starts_with('{') || trimmed.is_empty(),
-            "JSON with filters should be valid: got {}",
-            &trimmed[..trimmed.len().min(50)]
-        );
-    }
+    validate_json_output(&["Vec", "--include", "std::*", "--json"], "with filters", false);
 }
 
 /// Test backward compatibility - JSON should have expected fields
 #[test]
 fn test_json_backward_compatibility() {
-    let output = run_doc_query(&["Vec", "--json", "--include", "std::*"]);
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if output.status.success() && !stdout.trim().is_empty() {
-        // Basic JSON should be parseable
-        let trimmed = stdout.trim();
-        if trimmed.starts_with('[') || trimmed.starts_with('{') {
-            // Try to parse as JSON to verify validity
-            let _: Result<serde_json::Value, _> = serde_json::from_str(trimmed);
-            // If parsing fails, the test will show the error
-        }
-    }
+    validate_json_output(&["Vec", "--json", "--include", "std::*"], "backward compatible", true);
 }
 
 /// Test token budget limiting output
@@ -330,11 +320,9 @@ fn test_query_common_crate() {
     );
 }
 
-/// Test enum kind filter
-#[test]
-fn test_kind_filter_enum() {
-    let output = run_doc_query(&["Result", "--kind", "enum"]);
-
+/// Helper function to validate kind filter behavior for any (query, kind) pair.
+fn assert_kind_filter(query: &str, kind: &str, description: &str) {
+    let output = run_doc_query(&[query, "--kind", kind]);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
@@ -342,41 +330,26 @@ fn test_kind_filter_enum() {
             || stderr.contains("No cache")
             || stderr.contains("not found")
             || stderr.contains("Error"),
-        "Enum kind filter should work: {}",
-        stderr
+        "{description} kind filter should work: {stderr}",
+        description = description,
+        stderr = stderr
     );
+}
+
+/// Test enum kind filter
+#[test]
+fn test_kind_filter_enum() {
+    assert_kind_filter("Result", "enum", "Enum");
 }
 
 /// Test struct kind filter
 #[test]
 fn test_kind_filter_struct() {
-    let output = run_doc_query(&["Vec", "--kind", "struct"]);
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    assert!(
-        output.status.success()
-            || stderr.contains("No cache")
-            || stderr.contains("not found")
-            || stderr.contains("Error"),
-        "Struct kind filter should work: {}",
-        stderr
-    );
+    assert_kind_filter("Vec", "struct", "Struct");
 }
 
 /// Test trait kind filter
 #[test]
 fn test_kind_filter_trait() {
-    let output = run_doc_query(&["Clone", "--kind", "trait"]);
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    assert!(
-        output.status.success()
-            || stderr.contains("No cache")
-            || stderr.contains("not found")
-            || stderr.contains("Error"),
-        "Trait kind filter should work: {}",
-        stderr
-    );
+    assert_kind_filter("Clone", "trait", "Trait");
 }

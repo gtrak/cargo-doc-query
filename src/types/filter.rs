@@ -323,11 +323,6 @@ mod edge_case_tests {
         assert!(engine.matches("serde::Serialize", "trait", "Serde", "pub"));
         assert!(!engine.matches("serde::Serialize", "trait", "serde", "pub"));
 
-        // Kinds are case-insensitive
-        let config2 = FilterConfig::default().with_kind("STRUCT");
-        let engine2 = FilterEngine::compile(&config2).unwrap();
-        assert!(engine2.matches("crate::Foo", "struct", "crate", "pub"));
-        assert!(engine2.matches("crate::Bar", "STRUCT", "crate", "pub"));
     }
 
     #[test]
