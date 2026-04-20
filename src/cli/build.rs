@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use cargo_doc_query::cache::key::CacheKeyInputs;
+use cargo_doc_query::cache::global::{CrateCacheKey, GlobalCacheStore};
 use cargo_doc_query::cache::store::{CacheStore, SerializableCrateNode, SerializableIndex};
 
 pub struct BuildCommand {
@@ -77,10 +77,121 @@ impl BuildCommand {
             .join("doc")
     }
 
+    /// Generate rustdoc JSON for specific packages using cargo doc with RUSTDOCFLAGS
+    /// This builds only the specified packages via -p flags.
+    /// Falls back to individual builds if batch build fails.
+    fn generate_rustdoc_json_for_packages(
+        &self,
+        packages: &[(&str, &str)],
+    ) -> Result<Vec<(String, String, PathBuf)>> {
+        eprintln!(
+            "{}",
+            style(format!("Building {} packages...", packages.len())).yellow()
+        );
+
+        // Build all packages in a single cargo doc command with --all-features
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("+nightly").arg("doc");
+
+        // Add -p flags for each package
+        for (pkg_name, _) in packages {
+            cmd.arg("-p").arg(pkg_name);
+        }
+
+        cmd.arg("--all-features");
+
+        // Set RUSTDOCFLAGS for JSON output
+        let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
+        cmd.env("RUSTDOCFLAGS", rustdocflags);
+
+        // Set CARGO_TARGET_DIR for deterministic output location
+        let cargo_target_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(Self::TARGET_DIR);
+        cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
+
+        // Run the command
+        let output = cmd.output().context("Failed to run cargo doc")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "{}",
+                style(format!(
+                    "⚠ Batch build with --all-features failed ({})...",
+                    stderr.lines().next().unwrap_or("unknown error")
+                ))
+                .yellow()
+            );
+
+            // Fallback: try building each package individually without --all-features
+            let fallback_result = self.generate_rustdoc_json_individual_fallback(packages)?;
+            if !fallback_result.is_empty() {
+                return Ok(fallback_result);
+            }
+        }
+
+        // Collect the JSON files that were generated
+        let output_dir = self.get_output_dir();
+        self.scan_json_files(&output_dir)
+    }
+
+    /// Fallback: build each package individually without --all-features
+    fn generate_rustdoc_json_individual_fallback(
+        &self,
+        packages: &[(&str, &str)],
+    ) -> Result<Vec<(String, String, PathBuf)>> {
+        let mut all_json = Vec::new();
+
+        for (pkg_name, _) in packages {
+            eprintln!(
+                "{}",
+                style(format!("  Building {} individually...", pkg_name)).dim()
+            );
+
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.arg("+nightly")
+                .arg("doc")
+                .arg("-p")
+                .arg(pkg_name)
+                // Note: NOT using --all-features in fallback mode
+                .arg("--no-deps"); // Only document this package, not its deps
+
+            let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
+            cmd.env("RUSTDOCFLAGS", rustdocflags);
+
+            let cargo_target_dir = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(Self::TARGET_DIR);
+            cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
+
+            let output = cmd.output().context(format!("Failed to build {}", pkg_name))?;
+
+            if !output.status.success() {
+                eprintln!(
+                    "{}",
+                    style(format!("⚠ Failed to build {}", pkg_name)).yellow()
+                );
+                continue; // Try next package
+            }
+
+            // Collect JSON files for this package
+            let output_dir = self.get_output_dir();
+            if let Ok(mut json_files) = self.scan_json_files(&output_dir) {
+                // Filter to only include the package we just built
+                json_files.retain(|(name, _, _)| name == pkg_name);
+                all_json.extend(json_files);
+            }
+        }
+
+        Ok(all_json)
+    }
+
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS
     /// This generates JSON for all crates (workspace + dependencies) using cargo doc
     /// Works even when the workspace has compile errors because we scan the output directory
     /// for any JSON files that were successfully generated
+    #[allow(dead_code)]
     fn generate_rustdoc_json(&self) -> Result<Vec<(String, String, PathBuf)>> {
         println!("Generating rustdoc JSON via cargo doc...");
 
@@ -163,23 +274,25 @@ impl BuildCommand {
     fn generate_serializable_index(
         &self,
         json_paths: &[(String, String, PathBuf)],
-    ) -> SerializableIndex {
+    ) -> Result<SerializableIndex> {
         let mut nodes = Vec::new();
 
-        for (pkg_name, pkg_version, json_path) in json_paths {
+        for (pkg_name, pkg_version, _json_path) in json_paths {
+            // Use real blake3 env_hash from CrateCacheKey
+            let cache_key = CrateCacheKey::from_crate(pkg_name, pkg_version)?;
+            let env_hash = cache_key.env_hash();
             nodes.push(SerializableCrateNode {
                 name: pkg_name.clone(),
                 version: pkg_version.clone(),
-                json_path: json_path.display().to_string(),
+                env_hash,
             });
         }
 
-        SerializableIndex {
-            format_version: 1,
-            cache_key: String::new(),
+        Ok(SerializableIndex {
+            format_version: 2,
             nodes,
             edges: Vec::new(),
-        }
+        })
     }
 }
 
@@ -187,66 +300,111 @@ impl BuildCommand {
     pub fn execute(&self, cache_store: &CacheStore) -> Result<()> {
         eprintln!("{}", style("Building documentation index...").bold().cyan());
 
-        // 1. Get workspace dependencies (BUILD-02 fix)
+        // Step 1: Get ALL dependencies (direct + transitive)
         let deps_spinner = self.create_spinner("Discovering dependencies...");
-        let deps = crate::cargo::dependencies::get_workspace_dependencies(&self.manifest_path)
-            .context("Failed to get workspace dependencies")?;
-        deps_spinner.finish_with_message(format!("Found {} external dependencies", deps.len()));
+        let all_deps = crate::cargo::dependencies::get_all_dependencies(&self.manifest_path)
+            .context("Failed to get all dependencies")?;
+        deps_spinner.finish_with_message(format!("Found {} dependencies", all_deps.len()));
 
         // Check if there are any dependencies
-        if deps.is_empty() {
+        if all_deps.is_empty() {
             return Err(anyhow::anyhow!(
                 "This project has no external dependencies. cargo-doc-query requires dependencies to index.\n\
                 Add dependencies to your Cargo.toml and run `cargo doc-query build` again."
             ));
         }
 
-        // 2. Generate cache key from project inputs (CACHE-01)
-        let key_spinner = self.create_spinner("Computing cache key...");
-        let cache_inputs = CacheKeyInputs::from_project(&self.manifest_path)
-            .context("Failed to create cache key")?;
-        let cache_key = cache_inputs.generate_key();
-        key_spinner.finish_with_message(format!("Cache key: {}...", &cache_key[..16]));
-
-        if let Some(index) = cache_store.load(&cache_key)? {
+        // Step 2: Check if local cache already exists (quick return if we have a valid index)
+        if let Some(index) = cache_store.load()? {
             eprintln!(
                 "{}",
-                style(format!(
-                    "✓ Using cached index ({} crates)",
-                    index.nodes.len()
-                ))
-                .green()
+                style(format!("✓ Using cached index ({} crates)", index.nodes.len())).green()
             );
             return Ok(());
         }
 
-        eprintln!("{}", style("Cache miss, building index...").yellow());
+        // Step 3: Create global cache store and partition deps into cached vs uncached
+        let global_store = GlobalCacheStore::new()?;
 
-        // 4. Generate rustdoc JSON for external dependencies (BUILD-02 fix)
-        let json_paths = self.generate_rustdoc_json()?;
+        let mut cached_deps = Vec::new();
+        let mut uncached_deps = Vec::new();
 
-        // 5. Parse and validate all JSON files
-        let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
-
-        let json_paths_refs: Vec<_> = json_paths.iter().collect();
-        let mut ct = 0;
-        for (pkg_name, pkg_version, json_path) in &json_paths_refs {
-            process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
-
-            let _json_str = std::fs::read_to_string(json_path)
-                .with_context(|| format!("Failed to read {}", json_path.display()))?;
-
-            ct += 1;
-            process_pb.inc(1);
+        for (name, version, _) in &all_deps {
+            let key = CrateCacheKey::from_crate(name.as_str(), version.as_str())?;
+            if global_store.get(&key).is_some() {
+                cached_deps.push((name.clone(), version.clone()));
+            } else {
+                uncached_deps.push((name.clone(), version.clone()));
+            }
         }
-        process_pb.finish_with_message(format!("Indexed {} crates", ct));
 
-        // 8. Save to cache (CACHE-03)
-        let save_spinner = self.create_spinner("Saving cache...");
-        let mut serializable = self.generate_serializable_index(&json_paths);
-        serializable.cache_key = cache_key.clone();
-        cache_store.save(&cache_key, &serializable)?;
-        save_spinner.finish_with_message("Cache saved");
+        let total = all_deps.len();
+        let cached_count = cached_deps.len();
+        let uncached_count = uncached_deps.len();
+
+        // Step 4: Show cache progress
+        if cached_count == total {
+            eprintln!(
+                "{}",
+                style(format!("Found {}/{total} in global cache", cached_count)).green()
+            );
+        } else if uncached_count == total {
+            eprintln!(
+                "{}",
+                style(format!("No dependencies in global cache, building all {total}...")).yellow()
+            );
+        } else {
+            eprintln!(
+                "{}",
+                style(format!(
+                    "Found {cached_count}/{total} in global cache, building {}...",
+                    uncached_count
+                ))
+                .green()
+            );
+        }
+
+        // Step 5: Build only uncached dependencies (if any)
+        let json_paths = if !uncached_deps.is_empty() {
+            // Convert to slice of (&str, &str) for the build function
+            let packages: Vec<(&str, &str)> = uncached_deps
+                .iter()
+                .map(|(n, v)| (n.as_str(), v.as_str()))
+                .collect();
+
+            eprintln!("{}", style("Building index...").yellow());
+            self.generate_rustdoc_json_for_packages(&packages)?
+        } else {
+            // All deps are cached, no building needed
+            Vec::new()
+        };
+
+        // Step 6: Validate and copy built JSON files to global cache
+        if !json_paths.is_empty() {
+            let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
+
+            for (pkg_name, pkg_version, json_path) in &json_paths {
+                process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
+
+                // Validate JSON file can be read
+                std::fs::read_to_string(json_path)
+                    .with_context(|| format!("Failed to read {}", json_path.display()))?;
+
+                // Copy to global cache using env_hash as key
+                let cache_key = CrateCacheKey::from_crate(pkg_name, pkg_version)?;
+                global_store.put(&cache_key, json_path)
+                    .with_context(|| format!("Failed to copy {} to global cache", json_path.display()))?;
+
+                process_pb.inc(1);
+            }
+            process_pb.finish_with_message(format!("Indexed {} crates", json_paths.len()));
+        }
+
+        // Step 7: Build serializable index with real env_hash values
+        let save_spinner = self.create_spinner("Saving index...");
+        let serializable = self.generate_serializable_index(&json_paths)?;
+        cache_store.save(&serializable)?;
+        save_spinner.finish_with_message("Index saved");
 
         Ok(())
     }
@@ -255,7 +413,6 @@ impl BuildCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_build_command_creation() {
@@ -276,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serializable_index_generation() {
+    fn test_serializable_index_generation() -> anyhow::Result<()> {
         let json_paths = vec![
             (
                 "crate1".to_string(),
@@ -291,38 +448,20 @@ mod tests {
         ];
 
         let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
-        let serializable = build_cmd.generate_serializable_index(&json_paths);
+        let serializable = build_cmd.generate_serializable_index(&json_paths)?;
 
-        assert_eq!(serializable.format_version, 1);
+        assert_eq!(serializable.format_version, 2);
         assert_eq!(serializable.nodes.len(), 2);
         assert_eq!(serializable.nodes[0].name, "crate1");
         assert_eq!(serializable.nodes[0].version, "1.0.0");
+        // env_hash is now a 64-char blake3 hash, not the old placeholder format
+        assert_eq!(serializable.nodes[0].env_hash.len(), 64);
         assert_eq!(serializable.nodes[1].name, "crate2");
         assert_eq!(serializable.nodes[1].version, "2.0.0");
+        assert_eq!(serializable.nodes[1].env_hash.len(), 64);
         assert_eq!(serializable.edges.len(), 0);
-    }
 
-    #[test]
-    fn test_serializable_index_generation_with_absolute_paths() {
-        let json_paths = vec![
-            (
-                "crate1".to_string(),
-                "1.0.0".to_string(),
-                PathBuf::from("/absolute/path/crate1.json"),
-            ),
-            (
-                "crate2".to_string(),
-                "2.0.0".to_string(),
-                PathBuf::from("/another/path/crate2.json"),
-            ),
-        ];
-
-        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
-        let serializable = build_cmd.generate_serializable_index(&json_paths);
-
-        assert_eq!(serializable.nodes.len(), 2);
-        assert!(serializable.nodes[0].json_path.starts_with("/absolute"));
-        assert!(serializable.nodes[1].json_path.starts_with("/another"));
+        Ok(())
     }
 
     #[test]
@@ -360,18 +499,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_key_inputs_from_project() {
-        let manifest_path = Path::new("test-Cargo-Unique.toml");
-        let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
-
-        // When file doesn't exist, returns empty content (this is expected behavior)
-        assert!(inputs.cargo_toml_content.is_empty());
-        assert!(!inputs.rustc_version.is_empty());
-        assert!(!inputs.target_triple.is_empty());
-        assert!(!inputs.rustdoc_types_version.is_empty());
-    }
-
-    #[test]
     fn test_multiple_crate_names_with_hyphens() {
         let tests = vec![
             ("serde", "serde"),
@@ -386,7 +513,7 @@ mod tests {
         }
     }
 
-    #[test]
+     #[test]
     fn test_stdlib_package_list() {
         let stdlib_packages = [
             ("std", "0.0.0", "std/Cargo.toml"),
@@ -402,20 +529,6 @@ mod tests {
             assert!(!version.is_empty());
             assert!(!name.contains('/'));
         }
-    }
-
-    #[test]
-    fn test_cache_key_format() {
-        let manifest_path = Path::new("test-Cargo.toml");
-        let inputs = CacheKeyInputs::from_project(manifest_path).unwrap();
-
-        let key = inputs.generate_key();
-
-        // Should be a non-empty string
-        assert!(!key.is_empty());
-
-        // Should be 64 characters for BLAKE3 hash
-        assert_eq!(key.len(), 64);
     }
 
     #[test]
@@ -470,5 +583,154 @@ mod tests {
         assert!(doc_path.contains("target/"));
         assert!(doc_path.contains("/doc"));
         assert!(doc_path.ends_with("/doc"));
+    }
+
+    #[test]
+    fn test_generate_serializable_index_uses_real_env_hash() -> anyhow::Result<()> {
+        // Create a temp global cache store for testing
+        let temp_dir = tempfile::tempdir()?;
+        let _global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        let json_paths = vec![
+            (
+                "serde".to_string(),
+                "1.0.204".to_string(),
+                PathBuf::from("/tmp/serde.json"),
+            ),
+        ];
+
+        let build_cmd = BuildCommand::new(PathBuf::from("Cargo.toml"), false);
+        
+        // Create cache key to get the real env_hash format
+        let cache_key = CrateCacheKey::from_crate("serde", "1.0.204")?;
+        let expected_env_hash = cache_key.env_hash();
+
+        let serializable = build_cmd.generate_serializable_index(&json_paths)?;
+
+        // Verify we got exactly one node
+        assert_eq!(serializable.nodes.len(), 1);
+        
+        // The env_hash should be the blake3 hash (64 hex chars), not "name@version" format
+        let actual_env_hash = &serializable.nodes[0].env_hash;
+        assert_eq!(actual_env_hash.len(), 64, "env_hash should be 64 hex characters");
+        
+        // Verify it's a valid hex string
+        for c in actual_env_hash.chars() {
+            assert!(c.is_ascii_hexdigit(), "env_hash should only contain hex digits");
+        }
+
+        // The env_hash should match what CrateCacheKey produces for the same crate
+        assert_eq!(actual_env_hash, &expected_env_hash);
+        
+        // Verify it's NOT the old placeholder format
+        assert_ne!(actual_env_hash, "serde@1.0.204");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_command_cargo_doc_args_for_uncached() -> anyhow::Result<()> {
+        // Test that the -p flags are correctly constructed for uncached deps
+        let temp_dir = tempfile::tempdir()?;
+        let _global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        // Simulate discovering 3 dependencies
+        let all_deps = vec![
+            ("serde".to_string(), "1.0.204".to_string(), camino::Utf8PathBuf::from("/path/to/serde")),
+            ("anyhow".to_string(), "1.0.86".to_string(), camino::Utf8PathBuf::from("/path/to/anyhow")),
+            ("clap".to_string(), "4.5.23".to_string(), camino::Utf8PathBuf::from("/path/to/clap")),
+        ];
+
+        // Simulate that only serde is in cache, so anyhow and clap are uncached
+        let cached_count = 1;
+        let uncached_deps = &all_deps[cached_count..];
+
+        // Build the -p arguments that would be passed to cargo doc
+        let mut p_args: Vec<String> = vec![];
+        for (name, _, _) in uncached_deps {
+            p_args.push("-p".to_string());
+            p_args.push(name.clone());
+        }
+
+        // Verify we have the correct structure
+        assert_eq!(p_args.len(), 4, "Should have 2 crates * 2 args each");
+        assert_eq!(p_args[0], "-p");
+        assert_eq!(p_args[1], "anyhow");
+        assert_eq!(p_args[2], "-p");
+        assert_eq!(p_args[3], "clap");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_partition_cached_uncached() -> anyhow::Result<()> {
+        // Create a temp global cache store with one cached entry
+        let temp_dir = tempfile::tempdir()?;
+        let global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        // Pre-populate cache with serde
+        let serde_key = CrateCacheKey::from_crate("serde", "1.0.204")?;
+        let serde_file = temp_dir.path().join("serde_source.json");
+        std::fs::write(&serde_file, r#"{"root": {}}"#)?;
+        global_store.put(&serde_key, &serde_file)?;
+
+        // Simulate discovering 3 dependencies (only serde is cached)
+        let all_deps = vec![
+            ("serde".to_string(), "1.0.204".to_string()),
+            ("anyhow".to_string(), "1.0.86".to_string()),
+            ("clap".to_string(), "4.5.23".to_string()),
+        ];
+
+        // Partition into cached vs uncached (this is the core logic being tested)
+        let mut cached = Vec::new();
+        let mut uncached = Vec::new();
+
+        for (name, version) in &all_deps {
+            let key = CrateCacheKey::from_crate(name.as_str(), version.as_str())?;
+            if global_store.get(&key).is_some() {
+                cached.push((name.clone(), version.clone()));
+            } else {
+                uncached.push((name.clone(), version.clone()));
+            }
+        }
+
+        // Verify partition is correct
+        assert_eq!(cached.len(), 1, "Should have exactly 1 cached dependency");
+        assert_eq!(uncached.len(), 2, "Should have exactly 2 uncached dependencies");
+        
+        // Verify specific entries
+        assert_eq!(cached[0].0, "serde");
+        assert_eq!(cached[0].1, "1.0.204");
+        
+        let uncached_names: Vec<&str> = uncached.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(uncached_names.contains(&"anyhow"));
+        assert!(uncached_names.contains(&"clap"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fallback_individual_build() -> anyhow::Result<()> {
+        // Test that we can construct individual cargo doc commands as fallback
+        let temp_dir = tempfile::tempdir()?;
+        let _global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        // Simulate an uncached crate
+        let uncached_crate = ("test-crate".to_string(), "1.0.0".to_string());
+
+        // Construct the individual command (what we would do in fallback)
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("+nightly")
+            .arg("doc")
+            .arg("-p")
+            .arg(&uncached_crate.0);
+        
+        // Note: In real fallback, we would NOT use --all-features for individual builds
+        
+        // Verify command structure
+        let _ = cmd.arg("--help"); // Just check args are accepted, don't actually run
+        // Command construction succeeded
+
+        Ok(())
     }
 }

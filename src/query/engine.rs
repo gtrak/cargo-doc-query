@@ -3,8 +3,6 @@
 use anyhow::{Context, Result};
 use rustdoc_types::{Crate, Function, Id, Impl, Item, ItemEnum, Type};
 use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
 
 use crate::cache::store::SerializableIndex;
 use crate::parser::serde_helper::deserialize_with_stack;
@@ -129,7 +127,7 @@ impl QueryEngine {
         use crate::cache::store::CacheStore;
 
         let store = CacheStore::new()?;
-        let index = store.load_current()?.ok_or_else(|| {
+        let index = store.load()?.ok_or_else(|| {
             anyhow::anyhow!("No cached index found. Run `cargo doc-query build` first.")
         })?;
 
@@ -138,6 +136,8 @@ impl QueryEngine {
 
     /// Load a crate's rustdoc JSON into memory
     fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<()> {
+        use std::fs;
+
         // Check if already loaded
         let key = format!("{}::{}", crate_name, crate_version);
         if self.crates.contains_key(&key) {
@@ -145,7 +145,7 @@ impl QueryEngine {
         }
 
         // Find the crate node
-        let crate_node = self
+        let _crate_node = self
             .index
             .nodes
             .iter()
@@ -154,15 +154,11 @@ impl QueryEngine {
                 anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
             })?;
 
-        // Resolve the path (relative to current directory, or absolute)
-        let json_path = PathBuf::from(&crate_node.json_path);
-        let json_path = if json_path.is_absolute() {
-            json_path
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(&json_path)
-        };
+        // Resolve JSON path via global cache
+        let cache_key = crate::cache::global::CrateCacheKey::from_crate(crate_name, crate_version)?;
+        let global_store = crate::cache::global::GlobalCacheStore::new()?;
+        let json_path = global_store.get(&cache_key)
+            .ok_or_else(|| anyhow::anyhow!("Crate {} v{} not in global cache", crate_name, crate_version))?;
 
         // Load rustdoc JSON
         let json_str = fs::read_to_string(&json_path)

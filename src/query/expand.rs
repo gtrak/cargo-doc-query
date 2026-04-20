@@ -3,7 +3,6 @@
 use rustdoc_types::{Crate, Id, Item, ItemEnum, Type};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::cache::store::SerializableIndex;
@@ -73,7 +72,7 @@ impl TypeExpander {
         }
     }
 
-    /// Load a crate's rustdoc JSON into memory
+/// Load a crate's rustdoc JSON into memory
     fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<()> {
         use std::fs;
 
@@ -82,7 +81,8 @@ impl TypeExpander {
             return Ok(());
         }
 
-        let crate_node = self
+        // Verify the crate exists in index (for error messages)
+        let _crate_node = self
             .index
             .nodes
             .iter()
@@ -91,14 +91,11 @@ impl TypeExpander {
                 anyhow::anyhow!("Crate {} v{} not found in index", crate_name, crate_version)
             })?;
 
-        let json_path = PathBuf::from(&crate_node.json_path);
-        let json_path = if json_path.is_absolute() {
-            json_path
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(&json_path)
-        };
+        // Resolve JSON path via global cache
+        let cache_key = crate::cache::global::CrateCacheKey::from_crate(crate_name, crate_version)?;
+        let global_store = crate::cache::global::GlobalCacheStore::new()?;
+        let json_path = global_store.get(&cache_key)
+            .ok_or_else(|| anyhow::anyhow!("Crate {} v{} not in global cache", crate_name, crate_version))?;
 
         let json_str = fs::read_to_string(&json_path).map_err(|e| {
             anyhow::anyhow!(
@@ -719,7 +716,7 @@ pub fn expand_type(
 ) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
         .map_err(ExpandError::Other)?
-        .load_current()
+        .load()
         .map_err(ExpandError::Other)?
         .ok_or(ExpandError::NoCache)?;
 
@@ -737,7 +734,7 @@ pub fn expand_type_with_config(
 ) -> Result<ExpansionResult> {
     let index = crate::cache::store::CacheStore::new()
         .map_err(ExpandError::Other)?
-        .load_current()
+        .load()
         .map_err(ExpandError::Other)?
         .ok_or(ExpandError::NoCache)?;
 
@@ -780,8 +777,7 @@ mod tests {
     fn test_would_exceed_budget_unlimited() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -796,8 +792,7 @@ mod tests {
         let config = TokenConfig::new().with_budget(Some(10));
         let mut expander = TypeExpander::with_config(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -817,8 +812,7 @@ mod tests {
         let config = TokenConfig::new().with_budget(Some(10));
         let mut expander = TypeExpander::with_config(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -836,8 +830,7 @@ mod tests {
         let config = TokenConfig::new().with_budget(Some(100));
         let mut expander = TypeExpander::with_config(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -863,8 +856,7 @@ mod tests {
             .with_threshold(0.5);
         let mut expander = TypeExpander::with_config(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -884,8 +876,7 @@ mod tests {
     fn test_format_type_resolved_path() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -899,12 +890,11 @@ mod tests {
         assert_eq!(expander.format_type(&ty), "std::collections::HashMap");
     }
 
-    #[test]
+   #[test]
     fn test_format_type_primitive() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -918,8 +908,7 @@ mod tests {
     fn test_format_type_generic() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -933,8 +922,7 @@ mod tests {
     fn test_format_type_slice() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -948,8 +936,7 @@ mod tests {
     fn test_format_type_array() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -966,8 +953,7 @@ mod tests {
     fn test_format_type_tuple() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -984,8 +970,7 @@ mod tests {
     fn test_format_type_raw_pointer() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -1002,8 +987,7 @@ mod tests {
     fn test_format_type_borrowed_ref() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -1021,8 +1005,7 @@ mod tests {
     fn test_format_type_dyn_trait() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -1046,8 +1029,7 @@ mod tests {
     fn test_format_type_infer() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },
@@ -1061,8 +1043,7 @@ mod tests {
     fn test_format_type_unknown() {
         let expander = TypeExpander::new(
             crate::cache::store::SerializableIndex {
-                format_version: 1,
-                cache_key: "test".to_string(),
+                format_version: 2,
                 nodes: vec![],
                 edges: vec![],
             },

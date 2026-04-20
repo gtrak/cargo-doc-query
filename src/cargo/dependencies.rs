@@ -73,13 +73,13 @@ fn parse_cargo_lock(manifest_dir: &Path) -> Result<Vec<(String, String)>> {
     Ok(packages)
 }
 
-/// Returns a list of (package_name, package_version, manifest_path) for DIRECT dependencies only
-/// Falls back to parsing Cargo.lock if cargo metadata fails (e.g., when project has compile errors)
-pub fn get_workspace_dependencies(
+/// Returns a list of (package_name, package_version, manifest_path) for ALL dependencies
+/// (direct + transitive). Falls back to parsing Cargo.lock if cargo metadata fails.
+pub fn get_all_dependencies(
     manifest_path: &std::path::Path,
 ) -> Result<Vec<(String, String, Utf8PathBuf)>> {
     // Try cargo metadata first (gives us more accurate info)
-    match try_cargo_metadata(manifest_path) {
+    match try_all_dependencies(manifest_path) {
         Ok(deps) if !deps.is_empty() => return Ok(deps),
         Ok(_) => {
             // Empty deps, try lock file
@@ -110,8 +110,8 @@ pub fn get_workspace_dependencies(
     Ok(deps)
 }
 
-/// Try to get dependencies using cargo metadata
-fn try_cargo_metadata(
+/// Try to get ALL dependencies using cargo metadata (direct + transitive)
+fn try_all_dependencies(
     manifest_path: &std::path::Path,
 ) -> Result<Vec<(String, String, Utf8PathBuf)>> {
     let metadata = MetadataCommand::new()
@@ -121,7 +121,6 @@ fn try_cargo_metadata(
         .context("Failed to load cargo metadata")?;
 
     // Find the root package (the one at manifest_path)
-    // Normalize paths for comparison (handle relative vs absolute)
     let manifest_path =
         std::fs::canonicalize(manifest_path).unwrap_or_else(|_| manifest_path.to_path_buf());
     let root_package = metadata
@@ -135,23 +134,23 @@ fn try_cargo_metadata(
         .or_else(|| metadata.packages.first())
         .ok_or_else(|| anyhow::anyhow!("No root package found"))?;
 
-    // Get direct dependencies only (from the root package's resolve node)
-    let direct_dep_ids: HashSet<_> = metadata
+    // Get ALL dependencies from resolve graph (not just direct ones)
+    let all_dep_ids: HashSet<_> = metadata
         .resolve
         .as_ref()
         .and_then(|r| r.nodes.iter().find(|n| n.id == root_package.id))
         .map(|node| node.dependencies.iter().cloned().collect())
         .unwrap_or_default();
 
-    // Filter packages to only direct dependencies
+    // Filter packages to only dependencies (exclude workspace members)
     let mut deps = Vec::new();
     for package in &metadata.packages {
         // Skip workspace members (they're not external dependencies)
         if metadata.workspace_members.contains(&package.id) {
             continue;
         }
-        // Skip transitive dependencies (not in root package's dependencies)
-        if !direct_dep_ids.contains(&package.id) {
+        // Only include packages that are in the dependency graph
+        if !all_dep_ids.contains(&package.id) {
             continue;
         }
         deps.push((
@@ -160,6 +159,10 @@ fn try_cargo_metadata(
             package.manifest_path.clone(),
         ));
     }
+
+    // Remove duplicates (same crate can appear from different dependency paths)
+    deps.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    deps.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
 
     Ok(deps)
 }
@@ -179,5 +182,63 @@ mod tests {
 
         assert!(canonicalized.is_absolute() || manifest_path.is_absolute());
         assert!(canonicalized.ends_with("test-Cargo.toml"));
+    }
+
+    #[test]
+    fn test_get_all_dependencies_returns_structure() {
+        let current_dir = std::env::current_dir().unwrap();
+        let manifest_path = current_dir.join("Cargo.toml");
+
+        let deps = super::get_all_dependencies(&manifest_path).expect("Failed to get dependencies");
+
+        // Verify we got some dependencies (non-empty)
+        assert!(!deps.is_empty(), "Expected non-empty dependency list");
+
+        // Verify each entry has valid structure
+        for (name, version, manifest_path) in &deps {
+            // Check name is non-empty
+            assert!(!name.is_empty(), "Dependency name should not be empty");
+
+            // Check version is a valid semver (has at least major.minor.patch pattern)
+            assert!(version.len() >= 3, "Version '{}' should have at least 3 characters", version);
+
+            // Check manifest path is non-empty
+            assert!(!manifest_path.as_str().is_empty(), "Manifest path should not be empty");
+        }
+    }
+
+    #[test]
+    fn test_get_all_dependencies_includes_transitive() {
+        let current_dir = std::env::current_dir().unwrap();
+        let manifest_path = current_dir.join("Cargo.toml");
+
+        let all_deps = super::get_all_dependencies(&manifest_path).expect("Failed to get all dependencies");
+
+        // Verify that transitive deps are included (we should have more than just a few direct deps)
+        // This project has >5 direct dependencies, so transitive inclusion should yield many more
+        assert!(
+            all_deps.len() > 5,
+            "Expected more than 5 total dependencies (including transitive), got {}",
+            all_deps.len()
+        );
+    }
+
+    #[test]
+    fn test_get_all_dependencies_excludes_workspace() {
+        let current_dir = std::env::current_dir().unwrap();
+        let manifest_path = current_dir.join("Cargo.toml");
+
+        let deps = super::get_all_dependencies(&manifest_path).expect("Failed to get dependencies");
+
+        // Verify that the workspace crate itself (cargo-doc-query) is NOT in the list
+        let workspace_members: Vec<&String> = deps.iter()
+            .filter(|(name, _, _)| name == "cargo-doc-query")
+            .map(|(name, _, _)| name)
+            .collect();
+
+        assert!(
+            workspace_members.is_empty(),
+            "Workspace member 'cargo-doc-query' should not be in the dependency list"
+        );
     }
 }

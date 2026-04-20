@@ -8,6 +8,7 @@ use cargo_doc_query::types;
 
 use clap::{Parser, Subcommand};
 use cli::build::BuildCommand;
+use cli::clean::CleanCommand;
 use cli::expand::ExpandCommand;
 use error::errors::AppError;
 use std::process::ExitCode;
@@ -52,6 +53,9 @@ EXAMPLES:
     # Query with token budget for LLM contexts
     cargo doc-query query serde_json::Value --tokens 500
 
+    # Clear the global documentation cache
+    cargo doc-query clean
+
 EXIT CODES:
     0   Success
     1   General error
@@ -93,6 +97,15 @@ enum Commands {
     /// and builds a searchable index. Run this first before using query/expand.
     #[command(name = "build")]
     Build,
+
+    /// Clear the global documentation cache
+    ///
+    /// Removes all cached rustdoc JSON files from ~/.cache/cargo-doc-query/crates/
+    /// to free disk space or force a fresh rebuild.
+    ///
+    /// Note: Use `cargo clean` to remove project-level build artifacts.
+    #[command(name = "clean")]
+    Clean,
 
     /// Query a type's methods, traits, and optionally expand nested types
     ///
@@ -228,6 +241,12 @@ fn run(cli: Cli) -> Result<(), AppError> {
             cmd.execute(&cache_store)
                 .map_err(|e| AppError::BuildFailed(e.to_string()))
         }
+        Commands::Clean => {
+            let mut cmd = CleanCommand::new();
+            cmd.set_quiet(quiet);
+            cmd.execute()
+                .map_err(|e| AppError::Other(e))
+        }
         Commands::Query {
             path,
             depth,
@@ -322,7 +341,7 @@ fn run(cli: Cli) -> Result<(), AppError> {
 fn suggest_similar_types(path: &str) -> anyhow::Result<Vec<String>> {
     let cache_store = cache::store::CacheStore::new()?;
 
-    if let Some(index) = cache_store.load_current()? {
+    if let Some(index) = cache_store.load()? {
         let suggestions = query::suggest::find_similar_types(&index, path, 5);
         Ok(suggestions)
     } else {

@@ -253,48 +253,27 @@ impl ExpandCommand {
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
             .join("Cargo.toml");
 
-        // Generate expected cache key from manifest files
-        let cache_inputs =
-            cargo_doc_query::cache::key::CacheKeyInputs::from_project(&manifest_path)
-                .context("Failed to create cache key inputs")?;
-        let expected_key = cache_inputs.generate_key();
-
-        // Check if rebuild is needed
+        // Check if index exists, load or build as needed
         let cache_store = cargo_doc_query::cache::store::CacheStore::new()
             .context("Failed to initialize cache store")?;
 
-        let index = if let Some(current_index) = cache_store.load_current()? {
-            // Compare cache keys
-            if current_index.cache_key != expected_key {
+        let index = match cache_store.load()? {
+            Some(index) => index,
+            None => {
+                // No index exists, need to build
                 if !self.quiet {
-                    println!("Manifest changed, rebuilding index...");
+                    println!("No index found, building...");
                 }
                 let build_cmd = crate::cli::build::BuildCommand::new(
                     manifest_path.with_file_name("Cargo.toml"),
                     false,
                 );
-                build_cmd.execute(&cache_store).context("Rebuild failed")?;
+                build_cmd.execute(&cache_store).context("Build failed")?;
                 cache_store
-                    .load(&expected_key)
-                    .context("Failed to load rebuilt index")?
-                    .ok_or_else(|| anyhow::anyhow!("No cached index found after rebuild"))?
-            } else {
-                current_index
+                    .load()
+                    .context("Failed to load built index")?
+                    .ok_or_else(|| anyhow::anyhow!("No cached index found after build"))?
             }
-        } else {
-            // No cache exists, need to build
-            if !self.quiet {
-                println!("No index found, building...");
-            }
-            let build_cmd = crate::cli::build::BuildCommand::new(
-                manifest_path.with_file_name("Cargo.toml"),
-                false,
-            );
-            build_cmd.execute(&cache_store).context("Build failed")?;
-            cache_store
-                .load(&expected_key)
-                .context("Failed to load built index")?
-                .ok_or_else(|| anyhow::anyhow!("No cached index found after build"))?
         };
 
         if !self.quiet {
