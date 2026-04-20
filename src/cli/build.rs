@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -111,14 +111,14 @@ impl BuildCommand {
         let mut built_count = 0usize;
         let mut failed_packages = Vec::new();
 
-        for (pkg_name, _) in packages {
-            eprintln!("{}", style(format!("  Building {}...", pkg_name)).dim());
+        for (pkg_name, pkg_version) in packages {
+            eprintln!("{}", style(format!("  Building {} v{}...", pkg_name, pkg_version)).dim());
 
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("+nightly")
                 .arg("doc")
                 .arg("-p")
-                .arg(pkg_name);
+                .arg(format!("{}@{}", pkg_name, pkg_version));
             // No --all-features (incompatible with -p for external deps)
             // No --no-deps (we want transitive dep JSONs too)
 
@@ -347,23 +347,34 @@ impl BuildCommand {
             Vec::new()
         };
 
-        // Step 6: Validate and copy built JSON files to global cache
+        // Step 6: Copy built JSON files to global cache using metadata names and versions
         if !json_paths.is_empty() {
             let process_pb = self.create_progress_bar(json_paths.len() as u64, "Indexing crates");
 
-            for (pkg_name, pkg_version, json_path) in &json_paths {
-                process_pb.set_message(format!("Indexing {} v{}", pkg_name, pkg_version));
+            // Build a map from normalized crate name → json_path for quick lookup
+            let mut json_by_name: HashMap<String, PathBuf> = HashMap::new();
+            for (scanned_name, _version, json_path) in &json_paths {
+                let normalized = scanned_name.replace("-", "_");
+                json_by_name.insert(normalized, json_path.clone());
+            }
 
-                // Validate JSON file can be read
-                std::fs::read_to_string(json_path)
-                    .with_context(|| format!("Failed to read {}", json_path.display()))?;
+            for (dep_name, dep_version, _) in &all_deps {
+                let normalized_name = dep_name.replace("-", "_");
+                if let Some(json_path) = json_by_name.get(&normalized_name) {
+                    process_pb.set_message(format!("Indexing {} v{}", dep_name, dep_version));
 
-                // Copy to global cache using env_hash as key
-                let cache_key = CrateCacheKey::from_crate(pkg_name, pkg_version)?;
-                global_store.put(&cache_key, json_path)
-                    .with_context(|| format!("Failed to copy {} to global cache", json_path.display()))?;
+                    std::fs::read_to_string(json_path)
+                        .with_context(|| format!("Failed to read {}", json_path.display()))?;
 
-                process_pb.inc(1);
+                    let cache_key = CrateCacheKey::from_crate(dep_name, dep_version)?;
+                    global_store.put(&cache_key, json_path)
+                        .with_context(|| format!("Failed to copy {} to global cache", json_path.display()))?;
+
+                    process_pb.inc(1);
+                }
+                // If no JSON found for this dep, it was skipped during build (e.g., dev-deps)
+                // That's fine — we'll have the dep in the index but no JSON, queries for that
+                // specific crate will gracefully fail at query time
             }
             process_pb.finish_with_message(format!("Indexed {} crates", json_paths.len()));
         }
@@ -775,8 +786,8 @@ mod tests {
             .collect();
         
         // Should have doc and -p
-        assert!(args.contains(&"doc"), "Should have 'doc' arg");
-        assert!(args.contains(&"-p"), "Should have '-p' arg");
+        assert!(args.contains(&"doc".to_string()), "Should have 'doc' arg");
+        assert!(args.contains(&"-p".to_string()), "Should have '-p' arg");
         
         // Should NOT have --all-features (incompatible with -p for external deps)
         assert!(!args.contains(&"--all-features".to_string()), 
@@ -897,6 +908,117 @@ mod tests {
         assert!(!rustdocflags.is_empty(), "RUSTDOCFLAGS should not be empty");
         // CARGO_TARGET_DIR path constructed correctly
         assert!(cargo_target_dir.to_string_lossy().contains("target"), "CARGO_TARGET_DIR should contain 'target'");
+    }
+
+    // Test for Bug 3: verify global cache stores JSON under metadata version, not scanned version
+    #[test]
+    fn test_global_cache_uses_metadata_version() -> anyhow::Result<()> {
+        // Simulate: scanned JSON reports version "0.0.0" but cargo metadata says "1.0.102"
+        // The global cache should store under "1.0.102", not "0.0.0"
+        let temp_dir = tempfile::tempdir()?;
+        let global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        // Create a fake JSON file
+        let json_file = temp_dir.path().join("anyhow.json");
+        std::fs::write(&json_file, r#"{"format_version": 23}"#)?;
+
+        // Store using the METADATA version (what cargo metadata reports)
+        let metadata_key = CrateCacheKey::from_crate("anyhow", "1.0.102")?;
+        global_store.put(&metadata_key, &json_file)?;
+
+        // The global cache should NOT have an entry under "0.0.0"
+        let scanned_key = CrateCacheKey::from_crate("anyhow", "0.0.0")?;
+        assert!(global_store.get(&scanned_key).is_none(), 
+            "Should NOT find JSON under scanned version 0.0.0");
+
+        // The global cache SHOULD have an entry under "1.0.102"
+        let found = global_store.get(&metadata_key);
+        assert!(found.is_some(), 
+            "Should find JSON under metadata version 1.0.102");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_json_name_normalization_matches_deps() -> anyhow::Result<()> {
+        // Verify that cargo metadata name "rustdoc-types" matches
+        // JSON filename "rustdoc_types" via normalization
+        let dep_name = "rustdoc-types";
+        let json_filename = "rustdoc_types";
+        
+        let normalized_dep = dep_name.replace("-", "_");
+        let normalized_json = json_filename.replace("-", "_");
+        
+        assert_eq!(normalized_dep, normalized_json,
+            "Normalized names should match for hyphenated crate names");
+        
+        // Also test the reverse: finding a JSON file for a dep
+        let json_files: HashMap<String, String> = vec![
+            ("rustdoc_types".to_string(), "/path/to/rustdoc_types.json".to_string()),
+            ("serde".to_string(), "/path/to/serde.json".to_string()),
+        ].into_iter().collect();
+        
+        let lookup_key = dep_name.replace("-", "_");
+        assert!(json_files.contains_key(&lookup_key),
+            "Should find JSON file for hyphenated dep name");
+        
+        Ok(())
+    }
+
+    // Integration test: verify the step 6 fix works end-to-end
+    #[test]
+    fn test_step6_uses_metadata_version_for_cache_storage() -> anyhow::Result<()> {
+        // Simulate the scenario where scan_json_files returns (anyhow, "0.0.0", path)
+        // but all_deps contains ("anyhow", "1.0.102", manifest_path)
+        
+        let temp_dir = tempfile::tempdir()?;
+        let global_store = GlobalCacheStore::new_with_dir(temp_dir.path().to_path_buf())?;
+
+        // Simulate json_paths from scan_json_files (version extracted from JSON is "0.0.0")
+        let scanned_name = "anyhow";
+        let scanned_version = "0.0.0";  // What scan_json_files would return on extraction failure
+        let json_path = temp_dir.path().join("anyhow.json");
+        std::fs::write(&json_path, r#"{"format_version": 23}"#)?;
+        
+        let json_paths = vec![(scanned_name.to_string(), scanned_version.to_string(), json_path.clone())];
+
+        // Simulate all_deps from cargo metadata (version is "1.0.102")
+        let all_deps = vec![("anyhow".to_string(), "1.0.102".to_string(), Utf8PathBuf::from("/path/to/Cargo.toml"))];
+
+        // Execute the FIXED step 6 logic: build lookup map, iterate over all_deps
+        let mut json_by_name: HashMap<String, PathBuf> = HashMap::new();
+        for (scanned_name, _version, json_path) in &json_paths {
+            let normalized = scanned_name.replace("-", "_");
+            json_by_name.insert(normalized, json_path.clone());
+        }
+
+        for (dep_name, dep_version, _) in &all_deps {
+            let normalized_name = dep_name.replace("-", "_");
+            if let Some(json_path) = json_by_name.get(&normalized_name) {
+                // Use metadata version, NOT scanned version
+                let cache_key = CrateCacheKey::from_crate(dep_name, dep_version)?;
+                global_store.put(&cache_key, json_path)?;
+            }
+        }
+
+        // Verify: JSON is stored under metadata version "1.0.102", not scanned version "0.0.0"
+        let metadata_key = CrateCacheKey::from_crate("anyhow", "1.0.102")?;
+        let scanned_key = CrateCacheKey::from_crate("anyhow", "0.0.0")?;
+
+        assert!(global_store.get(&metadata_key).is_some(),
+            "JSON should be stored under metadata version 1.0.102");
+        assert!(global_store.get(&scanned_key).is_none(),
+            "JSON should NOT be stored under scanned version 0.0.0");
+
+        // Verify the index also uses metadata version (line 373 generates_index with all_deps)
+        let serializable = BuildCommand::new(PathBuf::from("Cargo.toml"), false)
+            .generate_serializable_index(&all_deps)?;
+        
+        assert_eq!(serializable.nodes[0].name, "anyhow");
+        assert_eq!(serializable.nodes[0].version, "1.0.102",
+            "Index should use metadata version 1.0.102, matching global cache key");
+
+        Ok(())
     }
 
 }

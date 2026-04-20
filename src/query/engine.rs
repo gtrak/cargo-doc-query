@@ -134,14 +134,15 @@ impl QueryEngine {
         Ok(Self::new(index))
     }
 
-    /// Load a crate's rustdoc JSON into memory
-    fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<()> {
+    /// Load a crate's rustdoc JSON into memory.
+    /// Returns Ok(true) if loaded or already present, Ok(false) if not in global cache.
+    fn load_crate(&mut self, crate_name: &str, crate_version: &str) -> Result<bool> {
         use std::fs;
 
         // Check if already loaded
         let key = format!("{}::{}", crate_name, crate_version);
         if self.crates.contains_key(&key) {
-            return Ok(());
+            return Ok(true);
         }
 
         // Find the crate node
@@ -157,8 +158,10 @@ impl QueryEngine {
         // Resolve JSON path via global cache
         let cache_key = crate::cache::global::CrateCacheKey::from_crate(crate_name, crate_version)?;
         let global_store = crate::cache::global::GlobalCacheStore::new()?;
-        let json_path = global_store.get(&cache_key)
-            .ok_or_else(|| anyhow::anyhow!("Crate {} v{} not in global cache", crate_name, crate_version))?;
+        let json_path = match global_store.get(&cache_key) {
+            Some(path) => path,
+            None => return Ok(false), // Not cached, skip gracefully
+        };
 
         // Load rustdoc JSON
         let json_str = fs::read_to_string(&json_path)
@@ -169,7 +172,7 @@ impl QueryEngine {
         })?;
 
         self.crates.insert(key, krate);
-        Ok(())
+        Ok(true)
     }
 
     /// Get a loaded crate
@@ -202,7 +205,14 @@ impl QueryEngine {
         // Try each crate one at a time, load only what's needed
         for (crate_name, crate_version) in &crates_to_search {
             // Load this crate
-            self.load_crate(crate_name, crate_version)?;
+            match self.load_crate(crate_name, crate_version) {
+                Ok(true) => {} // Crate loaded successfully
+                Ok(false) => {
+                    // Crate not in global cache, skip it silently
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
             let krate = self.get_crate(crate_name, crate_version)?;
 
             // Check if this crate has the type
@@ -616,11 +626,68 @@ impl QueryEngine {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+    mod tests {
+        use super::*;
+        use crate::cache::global::CrateCacheKey;
+        use crate::cache::store::SerializableCrateNode;
 
-    #[test]
-    fn test_query_options_default() {
+        #[test]
+        fn test_load_crate_returns_false_when_not_in_global_cache() -> anyhow::Result<()> {
+            // Create a minimal index with one crate that's not in the real global cache
+            let key = CrateCacheKey::from_crate("engine-nonexistent-test", "1.0.0")?;
+
+            let index = SerializableIndex {
+                format_version: 2,
+                nodes: vec![SerializableCrateNode {
+                    name: "engine-nonexistent-test".to_string(),
+                    version: "1.0.0".to_string(),
+                    env_hash: key.env_hash(),
+                }],
+                edges: vec![],
+            };
+
+            let mut engine = QueryEngine::new(index);
+
+            // load_crate should return Ok(false) for missing crate, not error
+            let result = engine.load_crate("engine-nonexistent-test", "1.0.0")?;
+            assert_eq!(result, false, "Should return false for missing crate");
+
+            // Also verify the crate wasn't added to self.crates
+            assert!(!engine.crates.contains_key("engine-nonexistent-test::1.0.0"));
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_load_crate_returns_true_when_already_loaded() -> anyhow::Result<()> {
+            // Use the real global cache - anyhow is already cached from previous build
+            let key = CrateCacheKey::from_crate("anyhow", "1.0.102")?;
+
+            let index = SerializableIndex {
+                format_version: 2,
+                nodes: vec![SerializableCrateNode {
+                    name: "anyhow".to_string(),
+                    version: "1.0.102".to_string(),
+                    env_hash: key.env_hash(),
+                }],
+                edges: vec![],
+            };
+
+            let mut engine = QueryEngine::new(index);
+
+            // First load should return true (loads from cache)
+            let result1 = engine.load_crate("anyhow", "1.0.102")?;
+            assert_eq!(result1, true);
+
+            // Second load should also return true (already cached in memory)
+            let result2 = engine.load_crate("anyhow", "1.0.102")?;
+            assert_eq!(result2, true);
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_query_options_default() {
         let options = QueryOptions::new(QueryKind::All);
         assert_eq!(options.kind, QueryKind::All);
         assert!(!options.include_docs);

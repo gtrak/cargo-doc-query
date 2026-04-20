@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
-use cargo_metadata::{CargoOpt, MetadataCommand};
+use cargo_metadata::{CargoOpt, DependencyKind, MetadataCommand};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -110,6 +110,32 @@ pub fn get_all_dependencies(
     Ok(deps)
 }
 
+/// Recursively collect all package IDs reachable via non-dev dependency edges
+fn collect_non_dev_deps(
+    resolve: &cargo_metadata::Resolve,
+    start_id: &cargo_metadata::PackageId,
+    visited: &mut HashSet<cargo_metadata::PackageId>,
+    result: &mut HashSet<cargo_metadata::PackageId>,
+) {
+    if !visited.insert(start_id.clone()) {
+        return;
+    }
+
+    if let Some(node) = resolve.nodes.iter().find(|n| &n.id == start_id) {
+        for dep in &node.deps {
+            // Only follow edges that have at least one non-dev kind
+            let has_non_dev_edge = dep.dep_kinds.iter().any(|dk| {
+                dk.kind != DependencyKind::Development
+            });
+
+            if has_non_dev_edge {
+                result.insert(dep.pkg.clone());
+                collect_non_dev_deps(resolve, &dep.pkg, visited, result);
+            }
+        }
+    }
+}
+
 /// Try to get ALL dependencies using cargo metadata (direct + transitive)
 fn try_all_dependencies(
     manifest_path: &std::path::Path,
@@ -134,13 +160,15 @@ fn try_all_dependencies(
         .or_else(|| metadata.packages.first())
         .ok_or_else(|| anyhow::anyhow!("No root package found"))?;
 
-    // Get ALL dependencies from resolve graph (not just direct ones)
-    let all_dep_ids: HashSet<_> = metadata
-        .resolve
-        .as_ref()
-        .and_then(|r| r.nodes.iter().find(|n| n.id == root_package.id))
-        .map(|node| node.dependencies.iter().cloned().collect())
-        .unwrap_or_default();
+    // Get non-dev dependencies from the resolve graph
+    let resolve = metadata.resolve.as_ref().ok_or_else(|| anyhow::anyhow!("No resolve graph found"))?;
+    let _root_node = resolve.nodes.iter().find(|n| n.id == root_package.id)
+        .ok_or_else(|| anyhow::anyhow!("Root package not in resolve graph"))?;
+
+    // Collect all package IDs that are reachable via non-dev dependencies
+    let mut non_dev_deps: HashSet<_> = HashSet::new();
+    let mut visited = HashSet::new();
+    collect_non_dev_deps(resolve, &root_package.id, &mut visited, &mut non_dev_deps);
 
     // Filter packages to only dependencies (exclude workspace members)
     let mut deps = Vec::new();
@@ -149,8 +177,8 @@ fn try_all_dependencies(
         if metadata.workspace_members.contains(&package.id) {
             continue;
         }
-        // Only include packages that are in the dependency graph
-        if !all_dep_ids.contains(&package.id) {
+        // Only include packages that are in the non-dev dependency graph
+        if !non_dev_deps.contains(&package.id) {
             continue;
         }
         deps.push((
@@ -240,5 +268,25 @@ mod tests {
             workspace_members.is_empty(),
             "Workspace member 'cargo-doc-query' should not be in the dependency list"
         );
+    }
+
+    #[test]
+    fn test_get_all_dependencies_excludes_dev_deps() {
+        let current_dir = std::env::current_dir().unwrap();
+        let manifest_path = current_dir.join("Cargo.toml");
+
+        let deps = super::get_all_dependencies(&manifest_path).expect("Failed to get dependencies");
+
+        // Get list of dep names
+        let dep_names: Vec<&str> = deps.iter().map(|(n, _, _)| n.as_str()).collect();
+
+        // Dev-dependencies should NOT be included
+        assert!(!dep_names.contains(&"criterion"), "criterion is a dev-dependency and should be excluded");
+        assert!(!dep_names.contains(&"insta"), "insta is a dev-dependency and should be excluded");
+        assert!(!dep_names.contains(&"proptest"), "proptest is a dev-dependency and should be excluded");
+
+        // Normal dependencies SHOULD be included
+        assert!(dep_names.contains(&"anyhow"), "anyhow is a normal dependency and should be included");
+        assert!(dep_names.contains(&"serde"), "serde is a normal dependency and should be included");
     }
 }
