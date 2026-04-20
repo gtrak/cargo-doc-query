@@ -2,8 +2,10 @@ use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cargo_doc_query::cache::global::{CrateCacheKey, GlobalCacheStore};
@@ -101,18 +103,36 @@ impl BuildCommand {
         Ok(all_json)
     }
 
-    /// Build each package individually with default features.
+    /// Build each package individually with default features, in PARALLEL.
     /// Skips packages that fail to build (dev-dependencies often can't build docs).
     fn generate_rustdoc_json_individual(
         &self,
         packages: &[(&str, &str)],
     ) -> Result<Vec<(String, String, PathBuf)>> {
-        let mut all_json = Vec::new();
-        let mut built_count = 0usize;
-        let mut failed_packages = Vec::new();
+        eprintln!(
+            "{}",
+            style(format!("Building {} packages in parallel...", packages.len())).yellow()
+        );
 
-        for (pkg_name, pkg_version) in packages {
-            eprintln!("{}", style(format!("  Building {} v{}...", pkg_name, pkg_version)).dim());
+        let all_json = Arc::new(Mutex::new(Vec::new()));
+        let failed_packages = Arc::new(Mutex::new(Vec::new()));
+        let built_count = Arc::new(Mutex::new(0usize));
+
+        // Create a progress bar (will be updated from multiple threads)
+        let pb = Arc::new(Mutex::new(if !self.quiet {
+            Some(self.create_progress_bar(packages.len() as u64, "Building packages"))
+        } else {
+            None
+        }));
+
+        // Build packages in parallel using rayon
+        packages.par_iter().for_each(|(pkg_name, pkg_version)| {
+            // Update progress bar
+            if let Ok(pb_guard) = pb.lock() {
+                if let Some(ref pb) = *pb_guard {
+                    pb.set_message(format!("Building {} v{}...", pkg_name, pkg_version));
+                }
+            }
 
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("+nightly")
@@ -131,37 +151,100 @@ impl BuildCommand {
             cmd.env("CARGO_TARGET_DIR", &cargo_target_dir);
 
             let output = cmd.output()
-                .with_context(|| format!("Failed to execute cargo doc for {}", pkg_name))?;
+                .with_context(|| format!("Failed to execute cargo doc for {}", pkg_name));
 
-            if output.status.success() {
-                eprintln!("{}", style(format!("  ✓ Built {}", pkg_name)).green());
-                if let Ok(json_files) = self.scan_json_files(&self.get_output_dir()) {
-                    all_json.extend(json_files);
+            match output {
+                Ok(output) if output.status.success() => {
+                    if !self.quiet {
+                        eprintln!(
+                            "{}",
+                            style(format!("  ✓ Built {} v{}", pkg_name, pkg_version)).green()
+                        );
+                    }
+
+                    // Collect JSON files
+                    if let Ok(json_files) = self.scan_json_files(&self.get_output_dir()) {
+                        if let Ok(mut json_guard) = all_json.lock() {
+                            json_guard.extend(json_files);
+                        }
+                    }
+
+                    if let Ok(mut count_guard) = built_count.lock() {
+                        *count_guard += 1;
+                    }
                 }
-                built_count += 1;
-            } else {
-                // Some crates (dev-deps, proc-macros) can't build docs — skip them
-                eprintln!("{}", style(format!("  ⚠ Skipped {} (build failed)", pkg_name)).yellow());
-                failed_packages.push(pkg_name.to_string());
+                _ => {
+                    // Some crates (dev-deps, proc-macros) can't build docs — skip them
+                    if !self.quiet {
+                        eprintln!(
+                            "{}",
+                            style(format!("  ⚠ Skipped {} v{} (build failed)", pkg_name, pkg_version))
+                                .yellow()
+                        );
+                    }
+                    if let Ok(mut failed_guard) = failed_packages.lock() {
+                        failed_guard.push(format!("{}@{}", pkg_name, pkg_version));
+                    }
+                }
             }
-        }
+
+            // Increment progress bar
+            if let Ok(pb_guard) = pb.lock() {
+                if let Some(ref pb) = *pb_guard {
+                    pb.inc(1);
+                }
+            }
+        });
+
+        // Unwrap Arc to get the Mutex contents
+        let all_json = Arc::try_unwrap(all_json)
+            .unwrap_or_else(|_| panic!("Arc still has multiple owners"))
+            .into_inner()
+            .unwrap();
+
+        let failed_packages = Arc::try_unwrap(failed_packages)
+            .unwrap_or_else(|_| Vec::new().into())
+            .into_inner()
+            .unwrap();
+
+        let built_count = Arc::try_unwrap(built_count)
+            .unwrap_or_else(|_| 0usize.into())
+            .into_inner()
+            .unwrap();
 
         if !failed_packages.is_empty() && !self.quiet {
-            eprintln!("{}", style(format!("  Skipped {} packages that couldn't build docs: [{}]",
-                failed_packages.len(),
-                failed_packages.join(", ")
-            )).dim());
+            eprintln!(
+                "{}",
+                style(format!(
+                    "  Skipped {} packages that couldn't build docs",
+                    failed_packages.len()
+                ))
+                .dim()
+            );
         }
 
         if built_count > 0 {
-            eprintln!("{}", style(format!("  Built {}/{} packages", built_count, packages.len())).green());
+            eprintln!(
+                "{}",
+                style(format!("  Built {}/{} packages", built_count, packages.len())).green()
+            );
+        }
+
+        // Finish progress bar
+        if let Ok(pb_guard) = pb.lock() {
+            if let Some(pb) = pb_guard.as_ref() {
+                pb.finish_with_message(format!("Indexed {} crates", all_json.len()));
+            }
         }
 
         // Deduplicate by (name, version) since multiple -p builds may produce overlapping results
         let mut seen = HashSet::new();
-        all_json.retain(|(name, version, _)| seen.insert((name.clone(), version.clone())));
+        let result: Vec<_> = all_json
+            .into_iter()
+            .filter(|(name, version, _)| seen.insert((name.clone(), version.clone())))
+            .collect();
 
-        Ok(all_json)
+        Ok(result)
     }
 
     /// Generate rustdoc JSON using cargo doc with RUSTDOCFLAGS

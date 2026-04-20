@@ -32,6 +32,8 @@ console = "0.16"
 ctrlc = "3.4"
 tempfile = "3.25"
 
+rayon = "1.10"
+
 # Benchmark dependencies
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
