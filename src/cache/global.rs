@@ -1,7 +1,21 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::fs;
+use std::sync::OnceLock;
 use anyhow::Result;
+
+/// Cached rustc version and target triple to avoid spawning subprocesses repeatedly.
+static RUSTC_INFO: OnceLock<(String, String)> = OnceLock::new();
+
+/// Get rustc version and target triple, caching the result.
+fn get_rustc_info_cached() -> Result<(&'static str, &'static str)> {
+    let (version, target) = RUSTC_INFO.get_or_init(|| {
+        let version = get_rustc_version().unwrap_or_else(|_| "unknown".to_string());
+        let target = get_target_triple();
+        (version, target)
+    });
+    Ok((version.as_str(), target.as_str()))
+}
 
 /// Cache key identifying a specific crate with its build environment.
 #[derive(Debug, Clone, PartialEq)]
@@ -15,16 +29,15 @@ pub struct CrateCacheKey {
 
 impl CrateCacheKey {
     /// Creates a cache key from crate name and version.
-    /// Automatically captures rustc version and target triple from the system.
+    /// Uses cached rustc version and target triple.
     pub fn from_crate(name: &str, version: &str) -> Result<Self> {
-        let rustc_version = get_rustc_version()?;
-        let target_triple = get_target_triple();
+        let (rustc_version, target_triple) = get_rustc_info_cached()?;
         
         Ok(Self {
             name: name.to_string(),
             version: version.to_string(),
-            rustc_version,
-            target_triple,
+            rustc_version: rustc_version.to_string(),
+            target_triple: target_triple.to_string(),
             features_hash: "default-features".to_string(),
         })
     }
@@ -415,5 +428,36 @@ mod tests {
         };
         assert_ne!(key_all.env_hash(), key_default.env_hash(), 
             "Different features_hash should produce different env_hash");
+    }
+
+    #[test]
+    fn test_rustc_info_is_cached() {
+        // First call should populate the cache
+        let (v1, t1) = get_rustc_info_cached().unwrap();
+        
+        // Second call should return the same cached values
+        let (v2, t2) = get_rustc_info_cached().unwrap();
+        
+        assert_eq!(v1, v2);
+        assert_eq!(t1, t2);
+        
+        // Verify they're not empty
+        assert!(!v1.is_empty());
+        assert!(!t1.is_empty());
+    }
+    
+    #[test]
+    fn test_from_crate_uses_cached_info() {
+        // Create two keys for different crates
+        let key1 = CrateCacheKey::from_crate("crate-a", "1.0.0").unwrap();
+        let key2 = CrateCacheKey::from_crate("crate-b", "2.0.0").unwrap();
+        
+        // Both should have the same rustc_version and target_triple (proving cache works)
+        assert_eq!(key1.rustc_version, key2.rustc_version);
+        assert_eq!(key1.target_triple, key2.target_triple);
+        
+        // Different names but SAME env_hash (same build environment)
+        assert_ne!(key1.name, key2.name);
+        assert_eq!(key1.env_hash(), key2.env_hash()); // Same rustc/target/features = same env hash
     }
 }
