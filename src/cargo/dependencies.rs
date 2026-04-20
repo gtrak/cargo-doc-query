@@ -110,33 +110,8 @@ pub fn get_all_dependencies(
     Ok(deps)
 }
 
-/// Recursively collect all package IDs reachable via non-dev dependency edges
-fn collect_non_dev_deps(
-    resolve: &cargo_metadata::Resolve,
-    start_id: &cargo_metadata::PackageId,
-    visited: &mut HashSet<cargo_metadata::PackageId>,
-    result: &mut HashSet<cargo_metadata::PackageId>,
-) {
-    if !visited.insert(start_id.clone()) {
-        return;
-    }
-
-    if let Some(node) = resolve.nodes.iter().find(|n| &n.id == start_id) {
-        for dep in &node.deps {
-            // Only follow edges that have at least one non-dev kind
-            let has_non_dev_edge = dep.dep_kinds.iter().any(|dk| {
-                dk.kind != DependencyKind::Development
-            });
-
-            if has_non_dev_edge {
-                result.insert(dep.pkg.clone());
-                collect_non_dev_deps(resolve, &dep.pkg, visited, result);
-            }
-        }
-    }
-}
-
-/// Try to get ALL dependencies using cargo metadata (direct + transitive)
+/// Try to get DIRECT dependencies using cargo metadata (non-transitive)
+/// Returns only immediate dependencies, not deps-of-deps.
 fn try_all_dependencies(
     manifest_path: &std::path::Path,
 ) -> Result<Vec<(String, String, Utf8PathBuf)>> {
@@ -160,25 +135,33 @@ fn try_all_dependencies(
         .or_else(|| metadata.packages.first())
         .ok_or_else(|| anyhow::anyhow!("No root package found"))?;
 
-    // Get non-dev dependencies from the resolve graph
+    // Get direct dependencies from the resolve graph
     let resolve = metadata.resolve.as_ref().ok_or_else(|| anyhow::anyhow!("No resolve graph found"))?;
-    let _root_node = resolve.nodes.iter().find(|n| n.id == root_package.id)
+    let root_node = resolve.nodes.iter().find(|n| n.id == root_package.id)
         .ok_or_else(|| anyhow::anyhow!("Root package not in resolve graph"))?;
 
-    // Collect all package IDs that are reachable via non-dev dependencies
-    let mut non_dev_deps: HashSet<_> = HashSet::new();
-    let mut visited = HashSet::new();
-    collect_non_dev_deps(resolve, &root_package.id, &mut visited, &mut non_dev_deps);
+    // Collect only DIRECT non-dev dependency package IDs
+    let mut direct_deps: HashSet<_> = HashSet::new();
+    for dep in &root_node.deps {
+        // Only include deps that have at least one non-dev edge
+        let has_non_dev_edge = dep.dep_kinds.iter().any(|dk| {
+            dk.kind != DependencyKind::Development
+        });
 
-    // Filter packages to only dependencies (exclude workspace members)
+        if has_non_dev_edge {
+            direct_deps.insert(dep.pkg.clone());
+        }
+    }
+
+    // Filter packages to only direct dependencies (exclude workspace members)
     let mut deps = Vec::new();
     for package in &metadata.packages {
         // Skip workspace members (they're not external dependencies)
         if metadata.workspace_members.contains(&package.id) {
             continue;
         }
-        // Only include packages that are in the non-dev dependency graph
-        if !non_dev_deps.contains(&package.id) {
+        // Only include packages that are DIRECT dependencies
+        if !direct_deps.contains(&package.id) {
             continue;
         }
         deps.push((
@@ -188,7 +171,7 @@ fn try_all_dependencies(
         ));
     }
 
-    // Remove duplicates (same crate can appear from different dependency paths)
+    // Sort and deduplicate (same crate can appear from different dependency paths)
     deps.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     deps.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
 
