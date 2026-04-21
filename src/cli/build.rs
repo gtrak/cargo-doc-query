@@ -116,6 +116,7 @@ impl BuildCommand {
 
         let all_json = Arc::new(Mutex::new(Vec::new()));
         let failed_packages = Arc::new(Mutex::new(Vec::new()));
+        let built_packages = Arc::new(Mutex::new(Vec::new()));
         let built_count = Arc::new(Mutex::new(0usize));
 
         // Create a progress bar (will be updated from multiple threads)
@@ -127,13 +128,6 @@ impl BuildCommand {
 
         // Build packages in parallel using rayon
         packages.par_iter().for_each(|(pkg_name, pkg_version)| {
-            // Update progress bar
-            if let Ok(pb_guard) = pb.lock() {
-                if let Some(ref pb) = *pb_guard {
-                    pb.set_message(format!("Building {} v{}...", pkg_name, pkg_version));
-                }
-            }
-
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("+nightly")
                 .arg("doc")
@@ -156,12 +150,8 @@ impl BuildCommand {
 
             match output {
                 Ok(output) if output.status.success() => {
-                    if !self.quiet {
-                        eprintln!(
-                            "{}",
-                            style(format!("  ✓ Built {} v{}", pkg_name, pkg_version)).green()
-                        );
-                    }
+                    // Store success info for printing after parallel execution
+                    built_packages.lock().unwrap().push((pkg_name.to_string(), pkg_version.to_string()));
 
                     // Collect JSON files
                     if let Ok(json_files) = self.scan_json_files(&self.get_output_dir()) {
@@ -176,13 +166,6 @@ impl BuildCommand {
                 }
                 _ => {
                     // Some crates (dev-deps, proc-macros) can't build docs — skip them
-                    if !self.quiet {
-                        eprintln!(
-                            "{}",
-                            style(format!("  ⚠ Skipped {} v{} (build failed)", pkg_name, pkg_version))
-                                .yellow()
-                        );
-                    }
                     if let Ok(mut failed_guard) = failed_packages.lock() {
                         failed_guard.push(format!("{}@{}", pkg_name, pkg_version));
                     }
@@ -203,10 +186,25 @@ impl BuildCommand {
             .into_inner()
             .unwrap();
 
-        let failed_packages = Arc::try_unwrap(failed_packages)
+         let failed_packages = Arc::try_unwrap(failed_packages)
             .unwrap_or_else(|_| Vec::new().into())
             .into_inner()
             .unwrap();
+
+        let built_packages = Arc::try_unwrap(built_packages)
+            .unwrap_or_else(|_| Vec::new().into())
+            .into_inner()
+            .unwrap();
+
+        // Print success messages after all parallel work completes (clean sequential output)
+        if !self.quiet && !built_packages.is_empty() {
+            for (pkg_name, pkg_version) in &built_packages {
+                eprintln!(
+                    "{}",
+                    style(format!("  ✓ Built {} v{}", pkg_name, pkg_version)).green()
+                );
+            }
+        }
 
         let built_count = Arc::try_unwrap(built_count)
             .unwrap_or_else(|_| 0usize.into())
