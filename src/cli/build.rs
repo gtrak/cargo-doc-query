@@ -138,9 +138,10 @@ impl BuildCommand {
             cmd.arg("+nightly")
                 .arg("doc")
                 .arg("-p")
-                .arg(format!("{}@{}", pkg_name, pkg_version));
+                .arg(format!("{}@{}", pkg_name, pkg_version))
+                .arg("--no-deps");
             // No --all-features (incompatible with -p for external deps)
-            // Note: We DON'T use --no-deps because rustdoc needs deps to resolve types
+            // Use --no-deps to only document the specific package, not its transitive deps
 
             let rustdocflags = "-Z unstable-options --output-format=json";
             cmd.env("RUSTDOCFLAGS", rustdocflags);
