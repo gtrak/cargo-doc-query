@@ -140,9 +140,9 @@ impl BuildCommand {
                 .arg("-p")
                 .arg(format!("{}@{}", pkg_name, pkg_version));
             // No --all-features (incompatible with -p for external deps)
-            // No --no-deps (we want transitive dep JSONs too)
+            // Note: We DON'T use --no-deps because rustdoc needs deps to resolve types
 
-            let rustdocflags = "-Z unstable-options --output-format json --document-private-items";
+            let rustdocflags = "-Z unstable-options --output-format=json";
             cmd.env("RUSTDOCFLAGS", rustdocflags);
 
             let cargo_target_dir = std::env::current_dir()
