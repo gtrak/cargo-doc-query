@@ -19,6 +19,7 @@ pub enum TruncationAction {
 /// Tracks cumulative token usage and provides truncation decisions
 /// based on configured budget constraints.
 #[derive(Debug, Clone)]
+// @lat: [[token-budgeting#Token Budgeting]]
 pub struct BudgetTracker {
     /// Optional total token budget
     total_budget: Option<usize>,

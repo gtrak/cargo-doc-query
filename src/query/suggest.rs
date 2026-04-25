@@ -4,6 +4,7 @@ use crate::cache::store::SerializableIndex;
 
 /// Calculate string similarity using simple case-insensitive substring matching
 /// Returns score from 0.0 to 1.0, higher is more similar
+// @lat: [[type-suggestion#Type Suggestion Engine]]
 fn similarity_score(a: &str, b: &str) -> f64 {
     let a_lower = a.to_lowercase();
     let b_lower = b.to_lowercase();
@@ -35,6 +36,7 @@ fn similarity_score(a: &str, b: &str) -> f64 {
 }
 
 /// Find similar crate names in the index
+// @lat: [[type-suggestion#Invariants]]
 pub fn find_similar_types(
     index: &SerializableIndex,
     query_path: &str,

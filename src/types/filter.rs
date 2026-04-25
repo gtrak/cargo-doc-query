@@ -478,6 +478,7 @@ enum RejectionReason {
 }
 
 /// Compiled filter engine for efficient pattern matching
+// @lat: [[filter-engine#Filter Engine]]
 #[derive(Debug, Clone)]
 pub struct FilterEngine {
     /// Compiled include patterns
@@ -513,6 +514,7 @@ impl FilterEngine {
     /// before more complex ones.
     ///
     /// Returns [`FilterError::InvalidGlob`] if any pattern is invalid.
+    // @lat: [[filter-engine#Invariants]]
     pub fn compile(config: &FilterConfig) -> Result<Self, FilterError> {
         Self::compile_optimized(config)
     }
@@ -580,6 +582,7 @@ impl FilterEngine {
     /// 5. Include patterns (glob matching - most expensive)
     ///
     /// This ordering minimizes the number of expensive glob pattern matches.
+    // @lat: [[filter-engine#Invariants]]
     pub fn matches(&self, path: &str, kind: &str, crate_name: &str, visibility: &str) -> bool {
         // Fast path: no filters active
         if self.is_empty() {

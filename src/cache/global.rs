@@ -18,6 +18,7 @@ fn get_rustc_info_cached() -> Result<(&'static str, &'static str)> {
 }
 
 /// Cache key identifying a specific crate with its build environment.
+// @lat: [[two-tier-caching#Two-Tier Caching]]
 #[derive(Debug, Clone, PartialEq)]
 pub struct CrateCacheKey {
     pub name: String,
@@ -30,6 +31,7 @@ pub struct CrateCacheKey {
 impl CrateCacheKey {
     /// Creates a cache key from crate name and version.
     /// Uses cached rustc version and target triple.
+    // @lat: [[two-tier-caching#Invariants]]
     pub fn from_crate(name: &str, version: &str) -> Result<Self> {
         let (rustc_version, target_triple) = get_rustc_info_cached()?;
         
@@ -65,6 +67,7 @@ pub struct CacheStats {
 }
 
 /// Global cache store for crate documentation JSON files.
+// @lat: [[two-tier-caching#Two-Tier Caching]]
 pub struct GlobalCacheStore {
     cache_dir: PathBuf,
 }
@@ -86,6 +89,7 @@ impl GlobalCacheStore {
     }
 
     /// Returns the path to a cached file if it exists.
+    // @lat: [[two-tier-caching#Invariants]]
     pub fn get(&self, key: &CrateCacheKey) -> Option<PathBuf> {
         let path = self.resolve(key);
         path.exists().then_some(path)

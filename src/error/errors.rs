@@ -23,6 +23,7 @@ mod tests {
 }
 
 /// Custom error types for the application
+// @lat: [[error-handling#Error Handling with Exit Codes]]
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("No cached index found. Run `cargo doc-query build` first.")]
@@ -49,6 +50,7 @@ pub enum AppError {
 
 impl AppError {
     /// Get the appropriate exit code for this error
+    // @lat: [[error-handling#Invariants]]
     pub fn exit_code(&self) -> ExitCode {
         ExitCode::from(1)
     }

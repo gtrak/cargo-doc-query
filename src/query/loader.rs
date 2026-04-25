@@ -25,6 +25,7 @@ impl<'a> CrateLoader<'a> {
 
     /// Load a crate's rustdoc JSON into memory.
     /// Returns Ok(true) if loaded or already present, Ok(false) if not in global cache.
+    // @lat: [[crate-loading#Crate Loading and Deduplication]]
     pub fn load_crate(
         &mut self,
         index: &SerializableIndex,

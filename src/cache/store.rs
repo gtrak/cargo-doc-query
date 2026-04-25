@@ -22,6 +22,7 @@ pub struct SerializableCrateNode {
 }
 
 /// Cache storage for the documentation index
+// @lat: [[two-tier-caching#Two-Tier Caching]]
 pub struct CacheStore {
     cache_dir: PathBuf,
 }
@@ -54,6 +55,7 @@ impl CacheStore {
     }
 
     /// Save index to cache at fixed path "index.idx"
+    // @lat: [[two-tier-caching#Invariants]]
     pub fn save(&self, index: &SerializableIndex) -> Result<PathBuf> {
         let data = to_stdvec(index).context("Failed to serialize index")?;
 
@@ -65,6 +67,7 @@ impl CacheStore {
 
     /// Try to load index from cache at fixed path "index.idx"
     /// Returns None if cache doesn't exist
+    // @lat: [[two-tier-caching#Invariants]]
     pub fn load(&self) -> Result<Option<SerializableIndex>> {
         let path = self.cache_dir.join("index.idx");
 

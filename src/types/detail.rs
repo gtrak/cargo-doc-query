@@ -12,6 +12,7 @@ use rustdoc_types::{
 /// Level of detail for metadata display
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[derive(Default)]
+// @lat: [[generic-rendering-fidelity#Generic Rendering Fidelity]]
 pub enum DetailLevel {
     /// Minimal mode: signatures only, no metadata
     Minimal,

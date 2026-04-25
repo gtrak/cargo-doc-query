@@ -17,6 +17,7 @@ use crate::types::doc::DocExtractor;
 use crate::types::query::*;
 
 #[derive(Debug, Clone)]
+// @lat: [[query-engine#Query Engine]]
 pub struct QueryOptions {
     kind: QueryKind,
     include_docs: bool,

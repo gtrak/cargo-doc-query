@@ -7,6 +7,7 @@ pub struct PathResolver;
 
 impl PathResolver {
     /// Find item by fully qualified path
+    // @lat: [[path-resolution#Path Resolution]]
     pub fn find_by_path<'a>(krate: &'a Crate, path: &str) -> Vec<(Id, &'a Item)> {
         krate
             .paths
@@ -17,6 +18,7 @@ impl PathResolver {
     }
 
     /// Find items by path across all loaded crates
+    // @lat: [[path-resolution#Path Resolution]]
     pub fn find_by_path_in_crates<'a>(
         crates: &'a HashMap<String, Crate>,
         path: &str,
@@ -41,6 +43,7 @@ impl PathResolver {
 
     /// Check if a path matches the query
     /// Path is Vec<String> but query is &str (e.g., "Vec" or "std::vec::Vec")
+    // @lat: [[path-resolution#Invariants]]
     pub fn path_matches(item_path: &[String], query_path: &str) -> bool {
         // Convert Vec<String> to a path string
         let path_str = item_path.join("::");

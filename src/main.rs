@@ -216,6 +216,7 @@ fn main() -> ExitCode {
     }
 }
 
+// @lat: [[error-handling#Invariants]]
 fn run(cli: Cli) -> Result<(), AppError> {
     let quiet = cli.quiet;
     let _no_color = cli.no_color;
